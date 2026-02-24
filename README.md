@@ -1,9 +1,5 @@
 # **MiniCompiler — Учебный компилятор для MiniLang**
 
-[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/std/the-standard)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
-[![Tests](https://img.shields.io/badge/tests-36%20passed-blue.svg)]()
 
 ## **📋 О проекте**
 
