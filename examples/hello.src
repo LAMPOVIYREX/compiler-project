@@ -1,0 +1,18 @@
+// Простая программа на MiniLang
+fn main() {
+    int x = 42;
+    float y = 3.14;
+    string name = "Hello, World!";
+    bool flag = true;
+    
+    if (x > 0 && flag) {
+        x = x + 1;
+        y *= 2.0;
+    }
+    
+    while (x < 100) {
+        x++;
+    }
+    
+    return 0;
+}

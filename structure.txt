@@ -1,0 +1,31 @@
+minicompiler/
+├── CMakeLists.txt          # Главный файл сборки
+├── README.md
+├── docs/
+│   └── language_spec.md    # Спецификация языка
+├── include/                # Заголовочные файлы
+│   ├── lexer/
+│   │   ├── Token.hpp
+│   │   ├── Scanner.hpp
+│   │   └── TokenType.hpp
+│   └── utils/
+│       └── ErrorReporter.hpp
+├── src/                    # Исходный код
+│   ├── lexer/
+│   │   ├── Scanner.cpp
+│   │   └── Token.cpp
+│   ├── utils/
+│   │   └── ErrorReporter.cpp
+│   └── main.cpp           # Точка входа
+├── tests/                  # Тесты
+│   ├── lexer/
+│   │   ├── valid/         # Корректные тесты
+│   │   └── invalid/       # Ошибочные тесты
+│   └── test_runner.cpp
+├── examples/               # Примеры исходного кода
+│   └── hello.src
+└── scripts/                # Вспомогательные скрипты
+    └── run_tests.py
+
+сама команда
+tree -I 'build|obj|*.o' --dirsfirst

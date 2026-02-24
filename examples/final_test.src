@@ -1,0 +1,44 @@
+// Тест препроцессора с поддержкой #elif
+#define MAX_SIZE 100
+#define PI 3.14159
+#define GREETING "Hello, World!"
+#define DEBUG 2
+
+fn main() {
+    int array[MAX_SIZE];
+    float area = PI * 5 * 5;
+    string message = GREETING;
+    
+    // Тест #if с числовым сравнением
+    #if MAX_SIZE > 50
+        print("MAX_SIZE > 50");
+    #else
+        print("MAX_SIZE <= 50");
+    #endif
+    
+    // Тест #elif
+    #if DEBUG == 1
+        print("DEBUG level 1");
+    #elif DEBUG == 2
+        print("DEBUG level 2");
+    #elif DEBUG == 3
+        print("DEBUG level 3");
+    #else
+        print("DEBUG level unknown");
+    #endif
+    
+    // Тест вложенных условий
+    #if defined(MAX_SIZE)
+        #if MAX_SIZE > 100
+            print("MAX_SIZE > 100");
+        #elif MAX_SIZE > 50
+            print("MAX_SIZE > 50");
+        #else
+            print("MAX_SIZE <= 50");
+        #endif
+    #endif
+    
+    #warning This is a test warning
+    
+    return 0;
+}
