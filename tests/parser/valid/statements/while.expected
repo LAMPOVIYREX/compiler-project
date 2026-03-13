@@ -1,0 +1,32 @@
+Program [line 1]
+  FunctionDecl: int sum [line 1]
+    Parameters:
+      int n
+    Block [line 1]
+      VarDecl: int result [line 2]
+        Initializer:
+          Literal: 0 [line 2]
+      VarDecl: int i [line 3]
+        Initializer:
+          Literal: 1 [line 3]
+      WhileStmt [line 4]
+        Condition:
+          BinaryOp: <= [line 4]
+            Identifier: i [line 4]
+            Identifier: n [line 4]
+        Body:
+          Block [line 4]
+            ExprStmt [line 5]
+              BinaryOp: = [line 5]
+                Identifier: result [line 5]
+                BinaryOp: + [line 5]
+                  Identifier: result [line 5]
+                  Identifier: i [line 5]
+            ExprStmt [line 6]
+              BinaryOp: = [line 6]
+                Identifier: i [line 6]
+                BinaryOp: + [line 6]
+                  Identifier: i [line 6]
+                  Literal: 1 [line 6]
+      ReturnStmt [line 8]
+        Identifier: result [line 8]

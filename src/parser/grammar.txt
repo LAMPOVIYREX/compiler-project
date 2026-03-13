@@ -1,0 +1,213 @@
+============================================================================
+MiniLang Context-Free Grammar (EBNF)
+============================================================================
+
+This grammar defines the syntax of the MiniLang programming language.
+Terminal symbols correspond to tokens from the lexer.
+
+============================================================================
+Program Structure
+============================================================================
+
+Program ::= { Declaration }
+
+Declaration ::= FunctionDecl
+              | StructDecl
+              | VarDecl               (global variables - optional)
+
+============================================================================
+Declarations
+============================================================================
+
+FunctionDecl ::= 'fn' Identifier '(' [ Parameters ] ')' [ '->' Type ] Block
+
+StructDecl   ::= 'struct' Identifier '{' { VarDecl } '}'
+
+VarDecl      ::= Type Identifier [ '=' Expression ] ';'
+
+Parameters   ::= Parameter { ',' Parameter }
+Parameter    ::= Type Identifier
+
+Type         ::= 'int' | 'float' | 'bool' | 'string' | Identifier   (struct types)
+
+============================================================================
+Statements
+============================================================================
+
+Statement    ::= Block
+               | IfStmt
+               | WhileStmt
+               | ForStmt
+               | ReturnStmt
+               | ExprStmt
+               | VarDecl               (local variables)
+               | EmptyStmt
+
+Block        ::= '{' { Statement } '}'
+
+IfStmt       ::= 'if' '(' Expression ')' Statement [ 'else' Statement ]
+
+WhileStmt    ::= 'while' '(' Expression ')' Statement
+
+ForStmt      ::= 'for' '(' [ ExprStmt ] ';' [ Expression ] ';' [ ExprStmt ] ')' Statement
+
+ReturnStmt   ::= 'return' [ Expression ] ';'
+
+ExprStmt     ::= Expression ';'
+
+EmptyStmt    ::= ';'
+
+============================================================================
+Expressions (with operator precedence)
+============================================================================
+
+Expression   ::= Assignment
+
+----------------------------------------------------------------------------
+Level 10: Assignment (right-associative)
+----------------------------------------------------------------------------
+Assignment   ::= LogicalOr
+               | LogicalOr ('=' | '+=' | '-=' | '*=' | '/=' | '%=') Assignment
+
+----------------------------------------------------------------------------
+Level 9: Logical OR (left-associative)
+----------------------------------------------------------------------------
+LogicalOr    ::= LogicalAnd { '||' LogicalAnd }
+
+----------------------------------------------------------------------------
+Level 8: Logical AND (left-associative)
+----------------------------------------------------------------------------
+LogicalAnd   ::= Equality { '&&' Equality }
+
+----------------------------------------------------------------------------
+Level 7: Equality (left-associative)
+----------------------------------------------------------------------------
+Equality     ::= Relational { ('==' | '!=') Relational }
+
+----------------------------------------------------------------------------
+Level 6: Relational (left-associative)
+----------------------------------------------------------------------------
+Relational   ::= Additive { ('<' | '<=' | '>' | '>=') Additive }
+
+----------------------------------------------------------------------------
+Level 5: Additive (left-associative)
+----------------------------------------------------------------------------
+Additive     ::= Multiplicative { ('+' | '-') Multiplicative }
+
+----------------------------------------------------------------------------
+Level 4: Multiplicative (left-associative)
+----------------------------------------------------------------------------
+Multiplicative ::= Unary { ('*' | '/' | '%') Unary }
+
+----------------------------------------------------------------------------
+Level 3: Unary (right-associative)
+----------------------------------------------------------------------------
+Unary        ::= ('-' | '!' | '++' | '--') Unary
+               | Postfix
+
+----------------------------------------------------------------------------
+Level 2: Postfix (left-associative)
+----------------------------------------------------------------------------
+Postfix      ::= Primary { PostfixOp }
+
+PostfixOp    ::= '++' 
+               | '--' 
+               | CallSuffix 
+               | IndexSuffix
+               | MemberAccess    // ДОБАВЛЕНО: доступ к полям структур
+
+MemberAccess ::= '.' Identifier   // точка с последующим идентификатором
+
+CallSuffix   ::= '(' [ Arguments ] ')'
+
+IndexSuffix  ::= '[' Expression ']'
+----------------------------------------------------------------------------
+Level 1: Primary
+----------------------------------------------------------------------------
+Primary      ::= Literal
+               | Identifier
+               | '(' Expression ')'
+               | Call
+
+Call         ::= Identifier '(' [ Arguments ] ')'
+
+Arguments    ::= Expression { ',' Expression }
+
+============================================================================
+Literals
+============================================================================
+
+Literal      ::= IntegerLiteral
+               | FloatLiteral
+               | StringLiteral
+               | BooleanLiteral
+
+IntegerLiteral ::= Digit+
+FloatLiteral   ::= Digit+ '.' Digit+ [ ('e' | 'E') [ '+' | '-' ] Digit+ ]
+StringLiteral  ::= '"' { Character | EscapeSequence } '"'
+BooleanLiteral ::= 'true' | 'false'
+
+Identifier   ::= Letter { Letter | Digit | '_' }
+Letter       ::= [a-zA-Z]
+Digit        ::= [0-9]
+
+EscapeSequence ::= '\' ( 'n' | 't' | 'r' | '"' | '\\' )
+
+============================================================================
+Operator Precedence Summary (Highest to Lowest)
+============================================================================
+
+1. Primary          : literals, identifiers, ( ), calls
+2. Postfix          : ++ -- () []
+3. Unary            : - ! ++ --
+4. Multiplicative   : * / %
+5. Additive         : + -
+6. Relational       : < <= > >=
+7. Equality         : == !=
+8. Logical AND      : &&
+9. Logical OR       : ||
+10. Assignment      : = += -= *= /= %=
+
+============================================================================
+Associativity Rules
+============================================================================
+
+Left-associative  : + - * / % && || == != < <= > >= ++ -- (postfix)
+Right-associative : = += -= *= /= %= - ! ++ -- (unary)
+Non-associative   : (none - chaining not allowed)
+
+============================================================================
+Example Programs
+============================================================================
+
+-- Example 1: Simple function
+fn add(int a, int b) -> int {
+    return a + b;
+}
+
+-- Example 2: Factorial
+fn factorial(int n) -> int {
+    int result = 1;
+    while (n > 0) {
+        result = result * n;
+        n = n - 1;
+    }
+    return result;
+}
+
+-- Example 3: Struct definition
+struct Point {
+    int x;
+    int y;
+}
+
+fn main() -> int {
+    Point p;
+    p.x = 10;
+    p.y = 20;
+    return p.x + p.y;
+}
+
+============================================================================
+End of Grammar
+============================================================================

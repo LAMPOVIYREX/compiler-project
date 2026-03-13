@@ -1,0 +1,16 @@
+// Test return statements
+fn test1() {
+    return;
+}
+
+fn test2() -> int {
+    return 42;
+}
+
+fn test3(bool flag) -> int {
+    if (flag) {
+        return 1;
+    } else {
+        return 0;
+    }
+}

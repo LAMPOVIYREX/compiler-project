@@ -1,0 +1,6 @@
+// Тест ошибок в строках
+string s1 = "Unclosed string;    // Незакрытая строка
+string s2 = "Bad escape \x";     // Неправильная escape-последовательность
+string s3 = "Newline
+in string";                      // Реальная новая строка
+string s4 = "Invalid \g escape"; // Неподдерживаемая escape-последовательность

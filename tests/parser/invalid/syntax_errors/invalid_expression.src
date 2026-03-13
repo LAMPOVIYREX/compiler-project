@@ -1,0 +1,4 @@
+fn test() {
+    int x = * 5;  // Invalid expression
+    return x;
+}

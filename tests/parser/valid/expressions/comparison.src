@@ -1,0 +1,8 @@
+fn test() {
+    bool a = 5 < 10;
+    bool b = 5 <= 5;
+    bool c = 10 > 5;
+    bool d = 10 >= 10;
+    bool e = 5 == 5;
+    bool f = 5 != 10;
+}

@@ -1,0 +1,19 @@
+fn add(int a, int b) -> int {
+    return a + b;
+}
+
+fn sub(int a, int b) -> int {
+    return a - b;
+}
+
+fn mul(int a, int b) -> int {
+    return a * b;
+}
+
+fn noParams() -> int {
+    return 42;
+}
+
+fn voidFunc() {
+    return;
+}

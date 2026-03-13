@@ -1,0 +1,33 @@
+Program [line 1]
+  FunctionDecl: void test [line 1]
+    Block [line 1]
+      VarDecl: bool a [line 2]
+        Initializer:
+          BinaryOp: < [line 2]
+            Literal: 5 [line 2]
+            Literal: 10 [line 2]
+      VarDecl: bool b [line 3]
+        Initializer:
+          BinaryOp: <= [line 3]
+            Literal: 5 [line 3]
+            Literal: 5 [line 3]
+      VarDecl: bool c [line 4]
+        Initializer:
+          BinaryOp: > [line 4]
+            Literal: 10 [line 4]
+            Literal: 5 [line 4]
+      VarDecl: bool d [line 5]
+        Initializer:
+          BinaryOp: >= [line 5]
+            Literal: 10 [line 5]
+            Literal: 10 [line 5]
+      VarDecl: bool e [line 6]
+        Initializer:
+          BinaryOp: == [line 6]
+            Literal: 5 [line 6]
+            Literal: 5 [line 6]
+      VarDecl: bool f [line 7]
+        Initializer:
+          BinaryOp: != [line 7]
+            Literal: 5 [line 7]
+            Literal: 10 [line 7]
