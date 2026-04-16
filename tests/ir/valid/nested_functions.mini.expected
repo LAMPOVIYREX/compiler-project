@@ -1,0 +1,27 @@
+# MiniLang IR Program
+
+function square: int ([x])
+
+entry:
+  t0 = MUL [x], [x]
+  RETURN t0
+
+function sumOfSquares: int ([a], [b])
+
+entry:
+  PARAM [a]
+  CALL square
+  PARAM [b]
+  CALL square
+  t2 = ADD t0, t1
+  RETURN t2
+
+function main: int ()
+
+entry:
+  [x] = MOVE 3
+  [y] = MOVE 4
+  PARAM [x]
+  PARAM [y]
+  CALL sumOfSquares
+  RETURN t0

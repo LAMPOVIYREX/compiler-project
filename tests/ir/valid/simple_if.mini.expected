@@ -1,0 +1,20 @@
+# MiniLang IR Program
+
+function main: int ()
+
+entry:
+  [x] = MOVE 10
+  t0 = CMP_GT [x], 5
+  JUMP_IF t0, then_1
+  JUMP else_2
+
+then_1:
+  t4 = ADD [x], 1
+  [x] = MOVE t4
+  JUMP endif_3
+
+else_2:
+  JUMP endif_3
+
+endif_3:
+  RETURN [x]

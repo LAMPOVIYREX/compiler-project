@@ -1,0 +1,7 @@
+fn sum(int n) -> int {
+    int result = 0;
+    for (int i = 1; i <= n; i = i + 1) {
+        result = result + i;
+    }
+    return result;
+}

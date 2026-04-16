@@ -1,0 +1,4 @@
+fn main() -> int {
+    int x = "hello";  // Ошибка: int = string
+    return x;
+}

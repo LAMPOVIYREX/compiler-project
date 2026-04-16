@@ -1,0 +1,28 @@
+# MiniLang IR Program
+
+function factorial: int ([n])
+
+entry:
+  t0 = CMP_LE [n], 1
+  JUMP_IF t0, then_1
+  JUMP else_2
+
+then_1:
+  RETURN 1
+
+else_2:
+  JUMP endif_3
+
+endif_3:
+  t4 = SUB [n], 1
+  PARAM t4
+  CALL factorial
+  t6 = MUL [n], t5
+  RETURN t6
+
+function main: int ()
+
+entry:
+  PARAM 5
+  CALL factorial
+  RETURN t0

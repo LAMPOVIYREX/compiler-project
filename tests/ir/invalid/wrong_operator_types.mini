@@ -1,0 +1,6 @@
+fn main() -> int {
+    int a = 5;
+    bool b = true;
+    int c = a + b;  // Ошибка: int + bool
+    return c;
+}

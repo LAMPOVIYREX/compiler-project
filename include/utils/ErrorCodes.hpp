@@ -1,0 +1,61 @@
+#pragma once
+#include <string>
+
+namespace minicompiler {
+
+// Коды ошибок по категориям
+enum class ErrorCode {
+    // Лексические ошибки (LEX-001 ... LEX-099)
+    LEX_UNEXPECTED_CHAR = 1,
+    LEX_INVALID_NUMBER,
+    LEX_INVALID_FLOAT,
+    LEX_UNTERMINATED_STRING,
+    LEX_NEWLINE_IN_STRING,
+    LEX_INVALID_ESCAPE,
+    LEX_UNTERMINATED_COMMENT,
+    LEX_IDENTIFIER_TOO_LONG,
+    
+    // Синтаксические ошибки (SYN-001 ... SYN-099)
+    SYN_MISSING_SEMICOLON = 100,
+    SYN_MISSING_PAREN,
+    SYN_MISSING_BRACE,
+    SYN_MISSING_BRACKET,
+    SYN_UNEXPECTED_TOKEN,
+    SYN_EXPECTED_EXPRESSION,
+    SYN_EXPECTED_IDENTIFIER,
+    SYN_EXPECTED_TYPE,
+    SYN_EXPECTED_STATEMENT,
+    SYN_UNCLOSED_BLOCK,
+    SYN_INVALID_EXPRESSION,
+    SYN_INVALID_ASSIGNMENT_TARGET,
+    SYN_EMPTY_STATEMENT,
+    
+    // Семантические ошибки (SEM-001 ... SEM-099)
+    SEM_UNDECLARED_IDENTIFIER = 200,
+    SEM_DUPLICATE_DECLARATION,
+    SEM_TYPE_MISMATCH,
+    SEM_UNDECLARED_FUNCTION,
+    SEM_WRONG_ARGUMENT_COUNT,
+    SEM_ARGUMENT_TYPE_MISMATCH,
+    SEM_RETURN_TYPE_MISMATCH,
+    SEM_MISSING_RETURN,
+    SEM_INVALID_CONDITION_TYPE,
+    SEM_INVALID_ARRAY_INDEX,
+    SEM_NON_ARRAY_INDEX,
+    SEM_INVALID_MEMBER_ACCESS,
+    
+    // Ошибки препроцессора (PRE-001 ... PRE-099)
+    PRE_UNKNOWN_DIRECTIVE = 300,
+    PRE_INVALID_SYNTAX,
+    PRE_UNTERMINATED_CONDITIONAL,
+    
+    // Общие ошибки (GEN-001 ... GEN-099)
+    GEN_SYNTAX_ERROR = 400,
+    GEN_INTERNAL_ERROR
+};
+
+std::string errorCodeToString(ErrorCode code);
+std::string errorCodeToCategory(ErrorCode code);
+std::string getErrorSuggestion(ErrorCode code);
+
+} // namespace minicompiler

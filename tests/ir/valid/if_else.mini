@@ -1,0 +1,13 @@
+fn main() -> int {
+    int x = 15;
+    if (x > 10) {
+        x = x + 5;
+        if (x > 20) {
+            return 100;
+        }
+        return 50;
+    } else {
+        x = x - 5;
+        return 0;
+    }
+}

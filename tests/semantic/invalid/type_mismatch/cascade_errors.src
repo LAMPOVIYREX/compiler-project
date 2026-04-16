@@ -1,0 +1,6 @@
+fn test() -> int {
+    string s = "hello";
+    int x = s;           
+    bool b = x && true;  
+    return b;            
+}

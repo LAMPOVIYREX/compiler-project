@@ -1,0 +1,12 @@
+fn test() -> int {
+    int x = 10;
+    {
+        int x = 20;
+        x = x + 5;
+    }
+    {
+        int y = 30;
+        y = y + x;
+    }
+    return x;
+}

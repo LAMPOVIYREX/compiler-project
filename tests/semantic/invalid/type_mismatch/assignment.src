@@ -1,0 +1,5 @@
+fn test() -> int {
+    string s = "hello";
+    int x = s;
+    return x;
+}

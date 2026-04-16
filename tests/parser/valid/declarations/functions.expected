@@ -1,0 +1,35 @@
+Program [line 1]
+  FunctionDecl: int add [line 1]
+    Parameters:
+      int a
+      int b
+    Block [line 1]
+      ReturnStmt [line 2]
+        BinaryOp: + [line 2]
+          Identifier: a [line 2]
+          Identifier: b [line 2]
+  FunctionDecl: int sub [line 5]
+    Parameters:
+      int a
+      int b
+    Block [line 5]
+      ReturnStmt [line 6]
+        BinaryOp: - [line 6]
+          Identifier: a [line 6]
+          Identifier: b [line 6]
+  FunctionDecl: int mul [line 9]
+    Parameters:
+      int a
+      int b
+    Block [line 9]
+      ReturnStmt [line 10]
+        BinaryOp: * [line 10]
+          Identifier: a [line 10]
+          Identifier: b [line 10]
+  FunctionDecl: int noParams [line 13]
+    Block [line 13]
+      ReturnStmt [line 14]
+        Literal: 42 [line 14]
+  FunctionDecl: void voidFunc [line 17]
+    Block [line 17]
+      ReturnStmt [line 18]

@@ -1,0 +1,22 @@
+# MiniLang IR Program
+
+function main: int ()
+
+entry:
+  [a] = MOVE 10
+  [b] = MOVE 3
+  t0 = ADD [a], [b]
+  [c] = MOVE t0
+  t1 = SUB [a], [b]
+  [d] = MOVE t1
+  t2 = MUL [a], [b]
+  [e] = MOVE t2
+  t3 = DIV [a], [b]
+  [f] = MOVE t3
+  t4 = MOD [a], [b]
+  [g] = MOVE t4
+  t5 = ADD [c], [d]
+  t6 = ADD t5, [e]
+  t7 = ADD t6, [f]
+  t8 = ADD t7, [g]
+  RETURN t8

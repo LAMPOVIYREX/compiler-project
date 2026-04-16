@@ -1,0 +1,14 @@
+function main: int ()
+entry:
+  [x] = MOVE 10
+  t = CMP_GT [x], 5
+  JUMP_IF t, then
+  JUMP else
+then:
+  t = ADD [x], 1
+  [x] = MOVE t
+  JUMP endif
+else:
+  JUMP endif
+endif:
+  RETURN [x]

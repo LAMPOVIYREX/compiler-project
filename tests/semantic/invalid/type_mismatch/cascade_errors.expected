@@ -1,0 +1,15 @@
+ОШИБКА [GEN-400]: Несовместимые типы при инициализации: 'int = string'
+Файл:tests/semantic/invalid/type_mismatch/cascade_errors.src
+Строка:3, позиция:9
+Код:    int x = s;           
+        ^
+Подсказка:Проверьте синтаксис кода
+
+ОШИБКА [GEN-400]: Несовместимые типы при инициализации: 'bool = error'
+Файл:tests/semantic/invalid/type_mismatch/cascade_errors.src
+Строка:4, позиция:10
+Код:    bool b = x && true;  
+         ^
+Подсказка:Проверьте синтаксис кода
+
+Всего ошибок:2

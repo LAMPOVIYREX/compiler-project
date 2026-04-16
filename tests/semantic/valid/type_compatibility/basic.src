@@ -1,0 +1,11 @@
+fn test() -> int {
+    int a = 5;
+    float b = 3.14;
+    float c = a;
+    int d = 10;
+    int e = d + 5;
+    bool f = true;
+    bool g = !f;
+    bool h = (a > 0) && f;
+    return 0;
+}

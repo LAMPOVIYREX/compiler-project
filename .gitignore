@@ -1,0 +1,54 @@
+# Object files
+*.o
+*.obj
+*.exe
+*.out
+
+# Executables
+/minicompiler
+/test_runner_final
+/test_errors
+/parser_test_runner
+/compiler
+
+# Temporary files
+*.bak
+*~
+*.swp
+*.swo
+*.tmp
+*.temp
+*.actual
+*.dot
+*.png
+*.svg
+*.pdf
+*.jpg
+*.log
+test_numbers.txt
+actual_output.txt
+
+# Test files (временные)
+test_*.mini
+myprogram.*
+test_*.txt
+
+# Test output files
+tests/parser/**/*.actual
+tests/parser/**/*.dot
+tests/parser/**/*.png
+
+# Build directories
+build/
+build-*/
+cmake-build-*/
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
+
+# OS files
+.DS_Store
+Thumbs.db

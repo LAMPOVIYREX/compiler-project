@@ -1,0 +1,51 @@
+# MiniLang IR Program
+
+function isPositive: int ([x])
+
+entry:
+  t0 = CMP_GT [x], 0
+  JUMP_IF t0, then_1
+  JUMP else_2
+
+then_1:
+  RETURN 1
+
+else_2:
+  JUMP endif_3
+
+endif_3:
+  RETURN 0
+
+function main: int ()
+
+entry:
+  [a] = MOVE 5
+  t0 = NEG 3
+  [b] = MOVE t0
+  t1 = CMP_GT [a], 0
+  t2 = CMP_GT [b], 0
+  t3 = AND t1, t2
+  JUMP_IF t3, then_4
+  JUMP else_5
+
+then_4:
+  RETURN 1
+
+else_5:
+  JUMP endif_6
+
+endif_6:
+  t7 = CMP_GT [a], 0
+  t8 = CMP_GT [b], 0
+  t9 = OR t7, t8
+  JUMP_IF t9, then_10
+  JUMP else_11
+
+then_10:
+  RETURN 2
+
+else_11:
+  JUMP endif_12
+
+endif_12:
+  RETURN 0

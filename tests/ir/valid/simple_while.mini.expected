@@ -1,0 +1,21 @@
+# MiniLang IR Program
+
+function main: int ()
+
+entry:
+  [i] = MOVE 0
+  [sum] = MOVE 0
+
+loop_0:
+  t2 = CMP_LT [i], 10
+  JUMP_IF_NOT t2, exit_1
+
+loop_0_body:
+  t3 = ADD [sum], [i]
+  [sum] = MOVE t3
+  t4 = ADD [i], 1
+  [i] = MOVE t4
+  JUMP loop_0
+
+exit_1:
+  RETURN [sum]

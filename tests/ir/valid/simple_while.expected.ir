@@ -1,0 +1,15 @@
+function main: int ()
+entry:
+  [i] = MOVE 0
+  [sum] = MOVE 0
+loop:
+  t = CMP_LT [i], 10
+  JUMP_IF_NOT t, exit
+loop_body:
+  t = ADD [sum], [i]
+  [sum] = MOVE t
+  t = ADD [i], 1
+  [i] = MOVE t
+  JUMP loop
+exit:
+  RETURN [sum]

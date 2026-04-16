@@ -1,0 +1,7 @@
+// Тест строк с escape-последовательностями
+string s1 = "Hello\nWorld";      // Новая строка
+string s2 = "Tab\there";         // Табуляция  
+string s3 = "Quote\"test";       // Кавычка внутри
+string s4 = "Backslash\\test";   // Обратный слеш
+string s5 = "Carriage\rreturn";  // Возврат каретки
+string s6 = "Mixed\ttest\nlines"; // Смешанные

@@ -1,0 +1,15 @@
+ОШИБКА [GEN-400]: Логический оператор требует bool, получены: int и bool
+Файл:tests/semantic/invalid/type_mismatch/operation.src
+Строка:4, позиция:16
+Код:    bool z = x && y;
+               ^
+Подсказка:Проверьте синтаксис кода
+
+ОШИБКА [GEN-400]: Несовместимые типы при инициализации: 'bool = error'
+Файл:tests/semantic/invalid/type_mismatch/operation.src
+Строка:4, позиция:10
+Код:    bool z = x && y;
+         ^
+Подсказка:Проверьте синтаксис кода
+
+Всего ошибок:2

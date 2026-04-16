@@ -1,0 +1,6 @@
+fn test() {
+    bool a = true && false;
+    bool b = true || false;
+    bool c = !true;
+    bool d = (5 > 3) && (10 < 20) || !false;
+}

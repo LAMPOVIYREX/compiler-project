@@ -1,0 +1,28 @@
+Program [line 1]
+  FunctionDecl: int factorial [line 1]
+    Parameters:
+      int n
+    Block [line 1]
+      IfStmt [line 2]
+        Condition:
+          BinaryOp: <= [line 2]
+            Identifier: n [line 2]
+            Literal: 1 [line 2]
+        Then:
+          Block [line 2]
+            ReturnStmt [line 3]
+              Literal: 1 [line 3]
+      ReturnStmt [line 5]
+        BinaryOp: * [line 5]
+          Identifier: n [line 5]
+          Call: factorial [line 5]
+            Arguments:
+              BinaryOp: - [line 5]
+                Identifier: n [line 5]
+                Literal: 1 [line 5]
+  FunctionDecl: int main [line 8]
+    Block [line 8]
+      ReturnStmt [line 9]
+        Call: factorial [line 9]
+          Arguments:
+            Literal: 5 [line 9]

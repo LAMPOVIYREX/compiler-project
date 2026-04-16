@@ -1,0 +1,6 @@
+function main: int ()
+entry:
+  t = MUL 3, 4
+  t = ADD 2, t
+  [x] = MOVE t
+  RETURN [x]

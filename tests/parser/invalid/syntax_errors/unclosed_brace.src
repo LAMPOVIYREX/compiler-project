@@ -1,0 +1,5 @@
+fn test() {
+    int x = 5;
+    if (x > 0) {
+        return x;
+    // missing closing brace

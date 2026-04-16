@@ -1,0 +1,35 @@
+// Fibonacci sequence
+fn fibonacci(int n) -> int {
+    if (n <= 1) {
+        return n;
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+fn fibonacciIter(int n) -> int {
+    if (n <= 1) {
+        return n;
+    }
+    
+    int a = 0;
+    int b = 1;
+    int c = 0;
+    int i = 2;
+    
+    while (i <= n) {
+        c = a + b;
+        a = b;
+        b = c;
+        i = i + 1;
+    }
+    
+    return b;
+}
+
+fn main() -> int {
+    int n = 10;
+    int rec = fibonacci(n);
+    int iter = fibonacciIter(n);
+    
+    return rec - iter;  // Should be 0
+}

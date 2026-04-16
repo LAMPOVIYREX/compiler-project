@@ -1,0 +1,9 @@
+# MiniLang IR Program
+
+function main: int ()
+
+entry:
+  t0 = MUL 3, 4
+  t1 = ADD 2, t0
+  [x] = MOVE t1
+  RETURN [x]

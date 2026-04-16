@@ -1,0 +1,8 @@
+ОШИБКА [SYN-100]: Пропущена точка с запятой перед 'return'
+Файл:tests/parser/invalid/syntax_errors/missing_semicolon.src
+Строка:3, позиция:5
+Код:    return x;
+        ^
+Подсказка:Добавьте ';' в конце оператора
+
+Всего ошибок: 1

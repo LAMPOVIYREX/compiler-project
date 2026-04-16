@@ -1,0 +1,7 @@
+# MiniLang IR Program
+
+function main: int ()
+
+entry:
+  RETURN 42
+  [x] = MOVE 5

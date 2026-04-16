@@ -1,0 +1,8 @@
+ОШИБКА [GEN-400]: Повторное объявление функции 'add'
+Файл:tests/semantic/invalid/duplicate_declaration/function.src
+Строка:5, позиция:1
+Код:fn add(int a, int b) -> int {
+^
+Подсказка:Проверьте синтаксис кода
+
+Всего ошибок:1

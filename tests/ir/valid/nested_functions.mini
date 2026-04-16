@@ -1,0 +1,13 @@
+fn square(int x) -> int {
+    return x * x;
+}
+
+fn sumOfSquares(int a, int b) -> int {
+    return square(a) + square(b);
+}
+
+fn main() -> int {
+    int x = 3;
+    int y = 4;
+    return sumOfSquares(x, y);
+}
