@@ -18,7 +18,7 @@ struct IRTestCase {
     std::string name;
     std::string inputFile;
     std::string expectedFile;
-    bool shouldFail;  // true для invalid тестов
+    bool shouldFail;  
 };
 
 std::string readFile(const std::string& filename) {

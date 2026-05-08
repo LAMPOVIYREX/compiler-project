@@ -11,8 +11,9 @@
 #include "parser/ASTDotGenerator.hpp"
 #include "parser/ASTJsonGenerator.hpp"
 #include "semantic/SemanticAnalyzer.hpp"
-#include "ir/IRGenerator.hpp"        
+#include "ir/IRGenerator.hpp"
 #include "ir/SSABuilder.hpp"
+#include "codegen/X86Generator.hpp"
 
 using namespace minicompiler;
 
@@ -22,7 +23,8 @@ enum class Command {
     PARSE,
     CHECK,
     IR,
-    SSA,           
+    SSA,
+    CODEGEN,
     COMPILE,
     HELP
 };
@@ -48,21 +50,25 @@ void printUsage(const char* programName) {
     std::cout << "  preprocess <file>       Run preprocessor only (Sprint 1)\n";
     std::cout << "  parse <file>            Parse and build AST (Sprint 2)\n";
     std::cout << "  check <file>            Semantic analysis only (Sprint 3)\n";
-    std::cout << "  ir <file>               Generate Intermediate Representation (IR)\n";
-    std::cout << "  ssa <file>              Generate SSA form IR\n";     
-    std::cout << "  compile <file>          Full compilation (preprocess + lex + parse)\n";
+    std::cout << "  ir <file>               Generate Intermediate Representation (Sprint 4)\n";
+    std::cout << "  ssa <file>              Generate SSA form IR (Sprint 4)\n";
+    std::cout << "  codegen <file>          Generate x86-64 assembly (Sprint 5)\n";
+    std::cout << "  compile <file>          Full compilation (all stages)\n";
     std::cout << "  help                    Show this help message\n\n";
     
-    std::cout << "Options for parse/check/ir command:\n";
+    std::cout << "Options for parse/check/ir/ssa/codegen command:\n";
     std::cout << "  --format <text|dot|json>  Output format (default: text)\n";
     std::cout << "  --output <file>           Output file (default: stdout)\n";
-    std::cout << "  --verbose                 Show detailed parsing information\n";
+    std::cout << "  --verbose                 Show detailed information\n";
     std::cout << "  --stats                   Show compilation statistics\n\n";
     
     std::cout << "Examples:\n";
     std::cout << "  " << programName << " lex examples/hello.src\n";
     std::cout << "  " << programName << " parse examples/factorial.src --format dot --output ast.dot\n";
     std::cout << "  " << programName << " check examples/factorial.src --verbose\n";
+    std::cout << "  " << programName << " ir examples/factorial.src\n";
+    std::cout << "  " << programName << " ssa examples/factorial.src\n";
+    std::cout << "  " << programName << " codegen examples/factorial.src\n";
     std::cout << "  " << programName << " compile examples/structs.src --stats\n";
 }
 
@@ -83,11 +89,13 @@ Options parseOptions(int argc, char* argv[]) {
         opts.command = Command::PARSE;
     } else if (cmd == "check") {
         opts.command = Command::CHECK;
-        opts.semantic = true;  // check implies semantic analysis
+        opts.semantic = true;
     } else if (cmd == "ir") {
         opts.command = Command::IR;
     } else if (cmd == "ssa") {
         opts.command = Command::SSA;
+    } else if (cmd == "codegen") {
+        opts.command = Command::CODEGEN;
     } else if (cmd == "compile") {
         opts.command = Command::COMPILE;
     } else if (cmd == "help") {
@@ -101,8 +109,8 @@ Options parseOptions(int argc, char* argv[]) {
     
     // Parse options for commands that support them
     if (opts.command == Command::PARSE || opts.command == Command::CHECK || 
-        opts.command == Command::IR || opts.command == Command::SSA ||   
-        opts.command == Command::COMPILE) {
+        opts.command == Command::IR || opts.command == Command::SSA ||
+        opts.command == Command::CODEGEN || opts.command == Command::COMPILE) {
         
         static struct option long_options[] = {
             {"format", required_argument, 0, 'f'},
@@ -168,7 +176,6 @@ std::string readFile(const std::string& filename) {
     return buffer.str();
 }
 
-// теперь возвращает bool вместо void
 bool runLexer(const std::string& filename, bool usePreprocessor = false) {
     try {
         ErrorReporter errorReporter;
@@ -215,7 +222,6 @@ bool runLexer(const std::string& filename, bool usePreprocessor = false) {
     }
 }
 
-// теперь возвращает bool вместо void
 bool runPreprocessor(const std::string& filename) {
     try {
         ErrorReporter errorReporter;
@@ -241,7 +247,6 @@ bool runPreprocessor(const std::string& filename) {
     }
 }
 
-// теперь возвращает bool вместо void
 bool runParser(const std::string& filename, const Options& opts) {
     try {
         ErrorReporter errorReporter;
@@ -312,17 +317,15 @@ bool runParser(const std::string& filename, const Options& opts) {
                 analyzer->printMemoryLayout();
             }
             
-            // 🔑 ВАЖНО: Если это команда check и есть ошибки - выводим их и возвращаем false
+            // If this is a check command and there are errors
             if (opts.command == Command::CHECK) {
                 if (errorReporter.hasErrors()) {
                     errorReporter.printErrors();
                     return false;
                 }
-                // Для команды check не выводим AST, только проверяем
                 return true;
             }
             
-            // Для других команд с семантикой - проверяем и выводим ошибки
             if (!semanticValid) {
                 errorReporter.printErrors();
                 return false;
@@ -377,7 +380,6 @@ bool runParser(const std::string& filename, const Options& opts) {
     }
 }
 
-// теперь возвращает bool вместо void
 bool runCompile(const std::string& filename, const Options& opts) {
     Options newOpts = opts;
     newOpts.semantic = true;
@@ -385,7 +387,6 @@ bool runCompile(const std::string& filename, const Options& opts) {
     return runParser(filename, newOpts);
 }
 
-// теперь возвращает bool вместо void
 bool runIR(const std::string& filename, const Options& opts) {
     try {
         ErrorReporter errorReporter;
@@ -400,88 +401,7 @@ bool runIR(const std::string& filename, const Options& opts) {
             return false;
         }
         
-        // Лексер
-        Scanner scanner(preprocessed, errorReporter);
-        auto tokens = scanner.scanTokens();
-        
-        if (errorReporter.hasErrors()) {
-            errorReporter.printErrors();
-            return false;
-        }
-        
-        // Парсер
-        Parser parser(tokens, errorReporter);
-        auto program = parser.parse();
-        
-        if (errorReporter.hasErrors()) {
-            errorReporter.printErrors();
-            return false;
-        }
-        
-        // Семантический анализ
-        SemanticAnalyzer analyzer(errorReporter);
-        bool semanticValid = analyzer.analyze(*program);
-        
-        if (!semanticValid || errorReporter.hasErrors()) {
-            errorReporter.printErrors();
-            return false;
-        }
-        
-        // Генерация IR
-        IRGenerator irGen(analyzer.getSymbolTable(), errorReporter);
-        auto irProgram = irGen.generate(*program);
-        
-        if (irGen.hasErrors() || errorReporter.hasErrors()) {
-            errorReporter.printErrors();
-            return false;
-        }
-        
-        // Вывод IR
-        std::ostream* out = &std::cout;
-        std::ofstream fileStream;
-        
-        if (!opts.outputFile.empty()) {
-            fileStream.open(opts.outputFile);
-            if (!fileStream.is_open()) {
-                std::cerr << "Error: Cannot open output file: " << opts.outputFile << std::endl;
-                return false;
-            }
-            out = &fileStream;
-        }
-        
-        *out << irProgram->toString();
-        
-        if (opts.stats) {
-            errorReporter.printStats();
-        }
-        
-        return true;
-        
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return false;
-    }
-}
-
-// ============================================================================
-// SSA Generation
-// ============================================================================
-
-bool runSSA(const std::string& filename, const Options& opts) {
-    try {
-        ErrorReporter errorReporter;
-        errorReporter.setFilename(filename);
-        
-        // Препроцессор
-        PreprocessorFrontend frontend(errorReporter);
-        std::string preprocessed = frontend.preprocessFile(filename);
-        
-        if (preprocessed.empty() || errorReporter.hasErrors()) {
-            errorReporter.printErrors();
-            return false;
-        }
-        
-        // Установка строк для ошибок
+        // Set source lines
         std::istringstream stream(preprocessed);
         std::string line;
         int lineNum = 1;
@@ -544,10 +464,111 @@ bool runSSA(const std::string& filename, const Options& opts) {
             return false;
         }
         
-        // ================================================================
-        // ПРЕОБРАЗОВАНИЕ В SSA ФОРМУ
-        // ================================================================
+        // Вывод IR
+        std::ostream* out = &std::cout;
+        std::ofstream fileStream;
         
+        if (!opts.outputFile.empty()) {
+            fileStream.open(opts.outputFile);
+            if (!fileStream.is_open()) {
+                std::cerr << "Error: Cannot open output file: " << opts.outputFile << std::endl;
+                return false;
+            }
+            out = &fileStream;
+        }
+        
+        *out << irProgram->toString();
+        
+        if (opts.stats) {
+            errorReporter.printStats();
+        }
+        
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool runSSA(const std::string& filename, const Options& opts) {
+    try {
+        ErrorReporter errorReporter;
+        errorReporter.setFilename(filename);
+        
+        // Препроцессор
+        PreprocessorFrontend frontend(errorReporter);
+        std::string preprocessed = frontend.preprocessFile(filename);
+        
+        if (preprocessed.empty() || errorReporter.hasErrors()) {
+            errorReporter.printErrors();
+            return false;
+        }
+        
+        // Set source lines
+        std::istringstream stream(preprocessed);
+        std::string line;
+        int lineNum = 1;
+        while (std::getline(stream, line)) {
+            errorReporter.setSourceLine(lineNum, line);
+            lineNum++;
+        }
+        
+        // Лексер
+        Scanner scanner(preprocessed, errorReporter);
+        auto tokens = scanner.scanTokens();
+        
+        if (errorReporter.hasErrors()) {
+            errorReporter.printErrors();
+            return false;
+        }
+        
+        if (opts.verbose) {
+            std::cout << "=== Tokens (" << tokens.size() << ") ===\n";
+            for (const auto& token : tokens) {
+                std::cout << "  " << token.toString() << std::endl;
+            }
+            std::cout << std::endl;
+        }
+        
+        // Парсер
+        Parser parser(tokens, errorReporter);
+        auto program = parser.parse();
+        
+        if (errorReporter.hasErrors()) {
+            errorReporter.printErrors();
+            return false;
+        }
+        
+        if (!program) {
+            std::cerr << "Failed to parse program\n";
+            return false;
+        }
+        
+        // Семантический анализ
+        SemanticAnalyzer analyzer(errorReporter);
+        bool semanticValid = analyzer.analyze(*program);
+        
+        if (!semanticValid || errorReporter.hasErrors()) {
+            errorReporter.printErrors();
+            return false;
+        }
+        
+        if (opts.verbose) {
+            std::cout << "\n=== Symbol Table ===" << std::endl;
+            std::cout << analyzer.getSymbolTable().toString() << std::endl;
+        }
+        
+        // Генерация IR
+        IRGenerator irGen(analyzer.getSymbolTable(), errorReporter);
+        auto irProgram = irGen.generate(*program);
+        
+        if (irGen.hasErrors() || errorReporter.hasErrors()) {
+            errorReporter.printErrors();
+            return false;
+        }
+        
+        // Преобразование в SSA форму
         SSABuilder ssaBuilder;
         ssaBuilder.setOptimizeConstants(true);
         ssaBuilder.setEliminateDeadCode(true);
@@ -571,6 +592,123 @@ bool runSSA(const std::string& filename, const Options& opts) {
         
         if (opts.verbose) {
             std::cout << "\n=== SSA Transformation Complete ===" << std::endl;
+        }
+        
+        if (opts.stats) {
+            errorReporter.printStats();
+        }
+        
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+// ============================================================================
+// Code Generation (Sprint 5)
+// ============================================================================
+
+bool runCodegen(const std::string& filename, const Options& opts) {
+    try {
+        ErrorReporter errorReporter;
+        errorReporter.setFilename(filename);
+        
+        // Препроцессор
+        PreprocessorFrontend frontend(errorReporter);
+        std::string preprocessed = frontend.preprocessFile(filename);
+        
+        if (preprocessed.empty() || errorReporter.hasErrors()) {
+            errorReporter.printErrors();
+            return false;
+        }
+        
+        // Set source lines
+        std::istringstream stream(preprocessed);
+        std::string line;
+        int lineNum = 1;
+        while (std::getline(stream, line)) {
+            errorReporter.setSourceLine(lineNum, line);
+            lineNum++;
+        }
+        
+        // Лексер
+        Scanner scanner(preprocessed, errorReporter);
+        auto tokens = scanner.scanTokens();
+        
+        if (errorReporter.hasErrors()) {
+            errorReporter.printErrors();
+            return false;
+        }
+        
+        if (opts.verbose) {
+            std::cout << "=== Tokens (" << tokens.size() << ") ===\n";
+            for (const auto& token : tokens) {
+                std::cout << "  " << token.toString() << std::endl;
+            }
+            std::cout << std::endl;
+        }
+        
+        // Парсер
+        Parser parser(tokens, errorReporter);
+        auto program = parser.parse();
+        
+        if (errorReporter.hasErrors()) {
+            errorReporter.printErrors();
+            return false;
+        }
+        
+        if (!program) {
+            std::cerr << "Failed to parse program\n";
+            return false;
+        }
+        
+        // Семантический анализ
+        SemanticAnalyzer analyzer(errorReporter);
+        bool semanticValid = analyzer.analyze(*program);
+        
+        if (!semanticValid || errorReporter.hasErrors()) {
+            errorReporter.printErrors();
+            return false;
+        }
+        
+        if (opts.verbose) {
+            std::cout << "\n=== Symbol Table ===" << std::endl;
+            std::cout << analyzer.getSymbolTable().toString() << std::endl;
+        }
+        
+        // Генерация IR
+        IRGenerator irGen(analyzer.getSymbolTable(), errorReporter);
+        auto irProgram = irGen.generate(*program);
+        
+        if (irGen.hasErrors() || errorReporter.hasErrors()) {
+            errorReporter.printErrors();
+            return false;
+        }
+        
+        // Генерация x86-64 кода
+        X86Generator x86Gen(analyzer.getSymbolTable(), errorReporter);
+        x86Gen.setSyntaxNASM();
+        std::string assembly = x86Gen.generate(*irProgram);
+        
+        // Вывод ассемблера
+        std::ostream* out = &std::cout;
+        std::ofstream fileStream;
+        
+        if (!opts.outputFile.empty()) {
+            fileStream.open(opts.outputFile);
+            if (!fileStream.is_open()) {
+                std::cerr << "Error: Cannot open output file: " << opts.outputFile << std::endl;
+                return false;
+            }
+            out = &fileStream;
+        }
+        
+        *out << assembly;
+        
+        if (opts.verbose) {
+            std::cout << "\n=== Code Generation Complete ===" << std::endl;
         }
         
         if (opts.stats) {
@@ -635,13 +773,22 @@ int main(int argc, char* argv[]) {
             success = runIR(opts.filename, opts);
             break;
 
-        case Command::SSA:                                   
+        case Command::SSA:
             if (opts.filename.empty()) {
                 std::cerr << "Error: Missing filename\n";
                 printUsage(argv[0]);
                 return 1;
             }
             success = runSSA(opts.filename, opts);
+            break;
+
+        case Command::CODEGEN:
+            if (opts.filename.empty()) {
+                std::cerr << "Error: Missing filename\n";
+                printUsage(argv[0]);
+                return 1;
+            }
+            success = runCodegen(opts.filename, opts);
             break;
             
         case Command::COMPILE:
@@ -659,6 +806,5 @@ int main(int argc, char* argv[]) {
             return 0;
     }
     
-    // Возвращаем код ошибки при неудаче
     return success ? 0 : 1;
 }

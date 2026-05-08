@@ -1,0 +1,9 @@
+fn main() -> int {
+    int a = 10;
+    int b = 5;
+    int c = 3;
+    
+    // (a + b) * c - a
+    int result = (a + b) * c - a;  // (15)*3 - 10 = 45-10 = 35
+    return result;
+}

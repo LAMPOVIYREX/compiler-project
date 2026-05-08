@@ -1,0 +1,13 @@
+fn main() -> int {
+    int a = 10;
+    int b = 3;
+    
+    int sum = a + b;      // 13
+    int diff = a - b;     // 7
+    int prod = a * b;     // 30
+    int quot = a / b;     // 3
+    int rem = a % b;      // 1
+    
+    int result = sum + diff + prod + quot + rem;  // 13+7+30+3+1 = 54
+    return result;
+}

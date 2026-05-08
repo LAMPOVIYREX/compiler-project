@@ -1,0 +1,11 @@
+fn main() -> int {
+    int x = 15;
+    
+    if (x > 10) {
+        if (x > 20) {
+            return 100;
+        }
+        return 50;
+    }
+    return 0;
+}

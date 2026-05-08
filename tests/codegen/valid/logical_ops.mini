@@ -1,0 +1,16 @@
+fn main() -> int {
+    int a = 5;
+    int b = 10;
+    
+    if (a > 0) {
+        if (b > 0) {
+            return 1;
+        }
+    }
+    
+    if (a < 0) {
+        return 2;
+    }
+    
+    return 0;
+}

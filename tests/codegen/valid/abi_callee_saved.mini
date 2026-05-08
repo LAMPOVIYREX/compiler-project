@@ -1,0 +1,9 @@
+// Тест сохранения callee-saved регистров
+fn callee() -> int {
+    return 42;
+}
+
+fn main() -> int {
+    int result = callee();
+    return result;
+}

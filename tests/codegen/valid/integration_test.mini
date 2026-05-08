@@ -1,0 +1,50 @@
+// Integration Test - MiniLang Sprint 5
+
+fn add(int a, int b) -> int {
+    return a + b;
+}
+
+fn sub(int a, int b) -> int {
+    return a - b;
+}
+
+fn mul(int a, int b) -> int {
+    return a * b;
+}
+
+fn factorial(int n) -> int {
+    if (n <= 1) {
+        return 1;
+    }
+    return n * factorial(n - 1);
+}
+
+fn max(int a, int b) -> int {
+    if (a > b) {
+        return a;
+    }
+    return b;
+}
+
+fn main() -> int {
+    // Test 1: Arithmetic
+    int sum = add(10, 32);
+    if (sum != 42) { return 1; }
+    
+    int diff = sub(100, 58);
+    if (diff != 42) { return 2; }
+    
+    int prod = mul(6, 7);
+    if (prod != 42) { return 3; }
+    
+    // Test 2: Factorial
+    int fact5 = factorial(5);
+    if (fact5 != 120) { return 10; }
+    
+    // Test 3: Conditional
+    int maxVal = max(100, 42);
+    if (maxVal != 100) { return 30; }
+    
+    // All tests passed!
+    return 42;
+}

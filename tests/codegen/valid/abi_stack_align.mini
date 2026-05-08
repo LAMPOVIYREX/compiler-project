@@ -1,0 +1,14 @@
+// Тест выравнивания стека (16 байт перед call)
+fn leaf1() -> int {
+    return 1;
+}
+
+fn leaf2() -> int {
+    return 2;
+}
+
+fn main() -> int {
+    int a = leaf1();
+    int b = leaf2();
+    return a + b;
+}
