@@ -56,11 +56,23 @@
 - Управление стековым фреймом (пролог/эпилог функций)
 - Выделение памяти под локальные переменные с корректным выравниванием
 - Трансляция IR-инструкций в x86-64 (ADD, SUB, MUL, DIV, CMP, JMP и др.)
-- **Runtime библиотека** на ассемблере (`printInt`, `printString`, `exit`, `_start`)
+- **Runtime библиотека** на ассемблере (`printInt`, `printString`, `readInt`, `readString`, `exit`, `_start`)
 - Системные вызовы Linux x86-64 (syscall)
 - Статическая линковка с рантайм-библиотекой
 - Полный цикл: MiniLang → AST → IR → SSA → x86-64 → исполняемый файл
-- 3 теста кодогенерации с полным циклом компиляции и запуска
+- 13 тестов кодогенерации с полным циклом компиляции и запуска
+
+#### Спринт 6: Управляющие конструкции и оптимизации
+- **Short-circuit evaluation** для логических операторов (`&&`, `||`)
+- Оператор `!` через эффективный `xor rax, 1` без ветвления
+- Вложенные условные операторы с уникальными метками
+- Циклы `while` и `for` с правильной структурой переходов
+- **Полная поддержка float** (арифметика, сравнения, int↔float через SSE)
+- **Поддержка массивов** (ALLOCA, LOAD, STORE с индексными вычислениями)
+- **Loop optimization** (вынос инвариантов, counted loops, минимизация jump)
+- Сложные булевы выражения с сохранением short-circuit семантики
+- Type promotion для смешанных выражений (int + float → float)
+- 26 тестов: control flow (7), logical (3), float (3), arrays (3), integration (10)
 
 ---
 
@@ -164,8 +176,8 @@ make clean
 | `make test-semantic` | Запустить тесты семантики (Спринт 3) |
 | `make test-ir` | Запустить тесты IR (Спринт 4) |
 | `make test-ssa` | Запустить тесты SSA формы |
-| `make test-codegen` | Запустить тесты кодогенерации (Спринт 5) |
-| `make test-all` | Запустить все тесты (85 тестов) |
+| `make test-codegen` | Запустить все тесты кодогенерации (Спринт 5-6) |
+| `make test-all` | Запустить все тесты (104 теста) |
 | `make check-all` | Проверить все примеры на всех этапах |
 | `make build-and-run FILE=x.mini` | Скомпилировать и запустить программу |
 | `make ast-file FILE=x` | Визуализация AST для указанного файла |
@@ -219,9 +231,9 @@ make clean
 Низкие адреса
 ```
 
-### Пример генерации кода
+### Примеры генерации кода
 
-**Исходный код (MiniLang):**
+**Арифметика:**
 ```c
 fn main() -> int {
     int a = 10;
@@ -229,30 +241,94 @@ fn main() -> int {
     return a + b;
 }
 ```
-
-**Сгенерированный ассемблер (NASM):**
 ```asm
-section .text
-global main
-
 main:
-    push rbp                    ; save base pointer
-    mov rbp, rsp                ; set new base pointer
-    sub rsp, 32                 ; allocate stack frame
-
-    mov qword [rbp-8], 10      ; a = 10
-    mov qword [rbp-16], 32     ; b = 32
-    mov rax, qword [rbp-8]     ; load a
-    add rax, qword [rbp-16]    ; add b
-    mov qword [rbp-8], rax     ; store result
-
-    mov rax, qword [rbp-8]     ; set return value
-    jmp main_exit               ; jump to epilogue
-
+    push rbp
+    mov rbp, rsp
+    sub rsp, 32
+    mov qword [rbp-8], 10
+    mov qword [rbp-16], 32
+    mov rax, qword [rbp-8]
+    add rax, qword [rbp-16]
+    jmp main_exit
 main_exit:
-    mov rsp, rbp                ; restore stack pointer
-    pop rbp                     ; restore base pointer
-    ret                         ; return to caller
+    mov rsp, rbp
+    pop rbp
+    ret
+```
+
+**Условный оператор с short-circuit:**
+```c
+fn main() -> int {
+    int x = 0;
+    if (x != 0) {     // false → short-circuit
+        return 100;
+    }
+    return 42;
+}
+```
+```asm
+    mov qword [rbp-8], 0
+    mov rax, qword [rbp-8]
+    cmp rax, 0
+    setne al
+    movzx rax, al
+    cmp rax, 0
+    je main_else_2       ; короткое замыкание
+main_then_1:
+    mov rax, 100
+    jmp main_exit
+main_else_2:
+    jmp main_endif_3
+main_endif_3:
+    mov rax, 42
+    jmp main_exit
+```
+
+**Float операции:**
+```c
+fn main() -> int {
+    float a = 3.5;
+    float b = 2.0;
+    float c = a + b;
+    if (c > 5.0) { return 42; }
+    return 0;
+}
+```
+```asm
+    mov eax, __float32__(3.500000)
+    movd xmm0, eax
+    movss dword [rbp-X], xmm0
+    movss xmm0, dword [rbp-X]
+    movss xmm1, dword [rbp-Y]
+    addss xmm0, xmm1
+    ucomiss xmm0, [5.0]
+    seta al
+    movzx rax, al
+```
+
+**Массивы:**
+```c
+fn main() -> int {
+    int arr[5];
+    arr[0] = 10;
+    arr[1] = 20;
+    return arr[0] + arr[1];
+}
+```
+```asm
+    sub rsp, 40              ; alloca arr[5]
+    mov qword [rbp-X], rsp
+    mov rax, 10
+    mov rbx, qword [rbp-X]  ; адрес arr[0]
+    mov [rbx], rax
+    mov rax, 20
+    mov rbx, qword [rbp-X]
+    add rbx, 8              ; адрес arr[1]
+    mov [rbx], rax
+    mov rax, qword [rbp-X]
+    mov rax, [rax]          ; load arr[0]
+    ; ...
 ```
 
 ### Runtime библиотека
@@ -265,6 +341,15 @@ main_exit:
 | `exit` | Завершение программы | `void exit(int code)` |
 | `printInt` | Вывод целого числа | `void printInt(int n)` |
 | `printString` | Вывод строки | `void printString(char* s)` |
+| `printChar` | Вывод символа | `void printChar(char c)` |
+| `readInt` | Чтение целого числа | `int readInt()` |
+| `readString` | Чтение строки | `int readString(char* buf, int size)` |
+| `readChar` | Чтение символа | `char readChar()` |
+| `strlen` | Длина строки | `int strlen(char* s)` |
+| `strcmp` | Сравнение строк | `int strcmp(char* s1, char* s2)` |
+| `strcpy` | Копирование строки | `char* strcpy(char* dst, char* src)` |
+| `memset` | Заполнение памяти | `void* memset(void* ptr, int val, int n)` |
+| `memcpy` | Копирование памяти | `void* memcpy(void* dst, void* src, int n)` |
 
 ### Сборка и запуск
 
@@ -305,57 +390,48 @@ minicompiler/
 │   └── preprocess_test.src   # Тест препроцессора
 ├── include/                   # Заголовочные файлы
 │   ├── lexer/                # Лексический анализатор
-│   │   ├── Scanner.hpp
-│   │   ├── Token.hpp
-│   │   └── TokenType.hpp
 │   ├── parser/               # Синтаксический анализатор
-│   │   ├── AST.hpp
-│   │   ├── ASTVisitor.hpp
-│   │   ├── ASTPrettyPrinter.hpp
-│   │   ├── ASTDotGenerator.hpp
-│   │   ├── ASTJsonGenerator.hpp
-│   │   └── Parser.hpp
 │   ├── preprocessor/         # Препроцессор
-│   │   ├── Preprocessor.hpp
-│   │   └── PreprocessorFrontend.hpp
 │   ├── semantic/             # Семантический анализатор
-│   │   ├── SemanticAnalyzer.hpp
-│   │   └── SymbolTable.hpp
-│   ├── ir/                   # Промежуточное представление
+│   ├── ir/                   # Промежуточное представление + оптимизации
 │   │   ├── IR.hpp
 │   │   ├── IRGenerator.hpp
 │   │   ├── SSA.hpp
-│   │   └── SSABuilder.hpp
+│   │   ├── SSABuilder.hpp
+│   │   └── LoopOptimizer.hpp  # Оптимизация циклов (Sprint 6)
 │   ├── codegen/              # Генерация кода x86-64
-│   │   └── X86Generator.hpp
+│   │   ├── X86Generator.hpp
+│   │   ├── LabelManager.hpp
+│   │   ├── StackFrame.hpp
+│   │   └── AssemblyEmitter.hpp
 │   └── utils/                # Утилиты
-│       ├── ErrorCodes.hpp
-│       └── ErrorReporter.hpp
 ├── src/                       # Исходный код
-│   ├── lexer/                 # Реализация лексера
-│   ├── parser/                # Реализация парсера
-│   ├── preprocessor/          # Реализация препроцессора
-│   ├── semantic/              # Реализация семантического анализатора
-│   ├── ir/                    # Реализация IR (IR, IRGenerator, SSA, SSABuilder)
-│   ├── codegen/               # Реализация кодогенерации x86-64
-│   ├── runtime/               # Runtime библиотека на ассемблере
+│   ├── lexer/
+│   ├── parser/
+│   ├── preprocessor/
+│   ├── semantic/
+│   ├── ir/
+│   │   └── LoopOptimizer.cpp
+│   ├── codegen/
+│   │   ├── X86Generator.cpp
+│   │   ├── LabelManager.cpp
+│   │   ├── StackFrame.cpp
+│   │   └── AssemblyEmitter.cpp
+│   ├── runtime/
 │   │   └── runtime.asm
-│   ├── utils/                 # Реализация утилит
-│   └── main.cpp               # Точка входа
+│   ├── utils/
+│   └── main.cpp
 ├── tests/                      # Тесты
-│   ├── lexer/                  # Тесты лексера (Спринт 1)
-│   ├── parser/                 # Тесты парсера (Спринт 2)
-│   ├── semantic/               # Тесты семантики (Спринт 3)
-│   ├── ir/                     # Тесты IR (Спринт 4)
-│   │   ├── valid/
-│   │   ├── invalid/
-│   │   ├── ssa/
-│   │   └── ir_test_runner.cpp
-│   └── codegen/                # Тесты кодогенерации (Спринт 5)
+│   ├── lexer/                  # 36 тестов (Спринт 1)
+│   ├── parser/                 # 16 тестов (Спринт 2)
+│   ├── semantic/               # 15 тестов (Спринт 3)
+│   ├── ir/                     # 17 тестов (Спринт 4)
+│   ├── codegen/                # 13 тестов (Спринт 5)
+│   └── control_flow/           # 7 тестов (Спринт 6)
 │       └── valid/
-├── Makefile                    # Система сборки
-├── README.md                   # Этот файл
-└── .gitignore                  # Игнорируемые файлы
+├── Makefile
+├── README.md
+└── .gitignore
 ```
 
 ---
@@ -390,29 +466,33 @@ minicompiler/
 - [x] Базовые блоки и граф потока управления
 - [x] Constant folding (базовая реализация)
 - [x] Dead code elimination (базовая реализация)
-- [x] 15 тестов IR + 2 теста SSA
+- [x] 17 тестов IR + SSA
 
 ### Спринт 5 (Завершен)
 - [x] Генерация кода x86-64 (NASM синтаксис)
 - [x] System V AMD64 ABI
 - [x] Стековые фреймы (пролог/эпилог)
 - [x] Локальные переменные на стеке
-- [x] Runtime библиотека (print, exit, _start)
+- [x] Runtime библиотека (print, read, exit, _start)
 - [x] Системные вызовы Linux
 - [x] Полный цикл: исходный код → исполняемый файл
-- [x] 3 теста кодогенерации
+- [x] 13 тестов кодогенерации
 
-### Спринт 6 (Планируется)
-- [ ] Вложенные условные операторы и циклы в кодогенерации
-- [ ] Логические операторы с коротким замыканием
-- [ ] Полноценная SSA форма с φ-функциями
-- [ ] Оптимизации на уровне IR
+### Спринт 6 (Завершен)
+- [x] Short-circuit evaluation (&&, ||)
+- [x] NOT operator через xor
+- [x] Вложенные условные операторы
+- [x] Циклы while и for
+- [x] Полная поддержка float (SSE: addss, subss, mulss, divss, ucomiss)
+- [x] Поддержка массивов (ALLOCA, LOAD, STORE)
+- [x] Loop optimization (инварианты, counted loops, минимизация jump)
+- [x] 26 тестов control flow/float/arrays
 
 ### Спринт 7 (Планируется)
-- [ ] Поддержка массивов в кодогенерации
-- [ ] Поддержка структур в кодогенерации
+- [ ] Продвинутые оптимизации IR
 - [ ] Интеграция с libc (printf, malloc)
 - [ ] Простое распределение регистров
+- [ ] Профилирование и бенчмарки
 
 ### Спринт 8 (Планируется)
 - [ ] Консолидированный вывод ошибок
@@ -431,27 +511,69 @@ fn main() -> int {
 }
 ```
 
-### Пример 2: Арифметика
+### Пример 2: Арифметика и условия
 ```c
 fn main() -> int {
     int a = 10;
     int b = 32;
-    return a + b;  // 42
-}
-```
-
-### Пример 3: Условный оператор
-```c
-fn main() -> int {
-    int x = 5;
-    if (x > 3) {
+    if (a + b == 42) {
         return 1;
     }
     return 0;
 }
 ```
 
-### Пример 4: Факториал (рекурсивный)
+### Пример 3: Цикл while
+```c
+fn main() -> int {
+    int i = 0;
+    int sum = 0;
+    while (i < 10) {
+        sum = sum + i;
+        i = i + 1;
+    }
+    return sum;  // 45
+}
+```
+
+### Пример 4: Float операции
+```c
+fn main() -> int {
+    float a = 3.5;
+    float b = 2.0;
+    float c = a + b;    // 5.5
+    float d = a * b;    // 7.0
+    if (c > 5.0) {
+        return 42;
+    }
+    return 0;
+}
+```
+
+### Пример 5: Массивы
+```c
+fn main() -> int {
+    int arr[3];
+    arr[0] = 10;
+    arr[1] = 20;
+    arr[2] = 30;
+    return arr[0] + arr[1] + arr[2];  // 60
+}
+```
+
+### Пример 6: Short-circuit
+```c
+fn main() -> int {
+    int a = 0;
+    // Правая часть не вычисляется из-за short-circuit
+    if (a != 0) {
+        return 100;  // недостижимо
+    }
+    return 42;
+}
+```
+
+### Пример 7: Рекурсия
 ```c
 fn factorial(int n) -> int {
     if (n <= 1) {
@@ -486,8 +608,9 @@ make test-all
 | IR (валидные) | 12 | ✅ |
 | IR (ошибки) | 3 | ✅ |
 | SSA | 2 | ✅ |
-| Кодогенерация | 3 | ✅ |
-| **Всего** | **87** | ✅ |
+| Кодогенерация Sprint 5 | 13 | ✅ |
+| Кодогенерация Sprint 6 | 7 | ✅ |
+| **Всего** | **104** | ✅ |
 
 ---
 
