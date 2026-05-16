@@ -10,6 +10,9 @@
 /test_errors
 /parser_test_runner
 /compiler
+/semantic_test_runner
+/ir_test_runner
+/parser_error_test_runner
 
 # Temporary files
 *.bak
@@ -25,6 +28,7 @@
 *.pdf
 *.jpg
 *.log
+*.asm
 test_numbers.txt
 actual_output.txt
 
@@ -37,6 +41,15 @@ test_*.txt
 tests/parser/**/*.actual
 tests/parser/**/*.dot
 tests/parser/**/*.png
+tests/semantic/**/*.actual
+tests/ir/**/*.actual
+tests/ir/**/*.expected
+tests/codegen/**/*.asm
+tests/codegen/**/*.o
+tests/codegen/**/*.out
+tests/control_flow/**/*.asm
+tests/control_flow/**/*.o
+tests/control_flow/**/*.out
 
 # Build directories
 build/
@@ -52,3 +65,14 @@ cmake-build-*/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Runtime
+src/runtime/runtime.o
+
+# Float test temp files
+float_test.asm
+float_test.o
+
+# Core dumps
+core
+*.core

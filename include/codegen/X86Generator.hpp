@@ -86,6 +86,10 @@ private:
     void emit(const std::string& line, const std::string& comment = "");
     void emitLabel(const std::string& name);
     void emitBlank();
+
+    
+    std::string getFloatOperand(const IROperand& op);
+    void saveFloatResult(const IROperand& dest);
     
     static constexpr const char* PARAM_REGS[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
     static constexpr const char* CALLER_SAVED[] = {"rax", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"};

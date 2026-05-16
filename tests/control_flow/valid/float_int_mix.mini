@@ -1,0 +1,9 @@
+fn main() -> int {
+    int a = 5;
+    float b = 2.5;
+    float d = a + b;
+    if (d > 7.0) {
+        return 42;
+    }
+    return 0;
+}

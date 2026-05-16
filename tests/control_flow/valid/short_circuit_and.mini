@@ -1,0 +1,14 @@
+fn sideEffect() -> int {
+    return 1;
+}
+
+fn main() -> int {
+    int a = 0;
+    // a == 0 — false, правая часть НЕ должна выполняться
+    if (a != 0) {
+        if (sideEffect() == 1) {
+            return 100;
+        }
+    }
+    return 42;
+}

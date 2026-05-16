@@ -1,0 +1,7 @@
+fn main() -> int {
+    bool flag = false;
+    if (!flag) {
+        return 42;
+    }
+    return 0;
+}

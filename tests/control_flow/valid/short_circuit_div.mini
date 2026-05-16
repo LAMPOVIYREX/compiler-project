@@ -1,0 +1,13 @@
+fn main() -> int {
+    int a = 0;
+    int b = 10;
+    
+    // short-circuit: b / a не вычисляется если a == 0
+    if (a != 0) {
+        if (b / a > 2) {
+            return 100;
+        }
+    }
+    
+    return 42;
+}

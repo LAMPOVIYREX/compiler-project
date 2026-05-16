@@ -1,0 +1,25 @@
+fn main() -> int {
+    int result = 0;
+    int i = 0;
+    
+    while (i < 5) {
+        if (i == 0) {
+            result = result + 1;
+        }
+        if (i == 1) {
+            result = result + 2;
+        }
+        if (i == 2) {
+            result = result + 3;
+        }
+        if (i == 3) {
+            result = result + 4;
+        }
+        if (i == 4) {
+            result = result + 5;
+        }
+        i = i + 1;
+    }
+    
+    return result;  // 1+2+3+4+5 = 15
+}

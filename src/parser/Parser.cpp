@@ -210,6 +210,19 @@ std::unique_ptr<VarDeclStmtNode> Parser::parseVariableDeclaration(bool requireSe
         nameToken.lexeme
     );
     
+    // Проверяем, является ли это массивом: int arr[N]
+    if (match(TokenType::LBRACKET)) {
+        // Это массив
+        if (match(TokenType::INT_LITERAL)) {
+            int arraySize = std::stoi(previous().lexeme);
+            varDecl->varType = Type(new Type(varType), arraySize);
+        }
+        // Также может быть пустой массив: int arr[]
+        if (!match(TokenType::RBRACKET)) {
+            errorReporter.reportMissingBracket(peek().line, peek().column);
+        }
+    }
+    
     if (match(TokenType::EQUAL)) {
         varDecl->initializer = parseExpression();
     }
@@ -234,9 +247,9 @@ std::unique_ptr<ExprStmtNode> Parser::parseExpressionStatement() {
         errorReporter.reportMissingSemicolon(peek().line, peek().column, peek().lexeme);
     }
     
-    return std::make_unique<ExprStmtNode>(
-        expr->getLine(), expr->getColumn(), std::move(expr)
-    );
+    int line = expr->getLine();
+    int column = expr->getColumn();
+    return std::make_unique<ExprStmtNode>(line, column, std::move(expr));
 }
 
 
@@ -306,9 +319,9 @@ std::unique_ptr<StatementNode> Parser::parseStatement() {
         errorReporter.reportMissingSemicolon(peek().line, peek().column, peek().lexeme);
     }
     
-    return std::make_unique<ExprStmtNode>(
-        expr->getLine(), expr->getColumn(), std::move(expr)
-    );
+    int line = expr->getLine();
+    int column = expr->getColumn();
+    return std::make_unique<ExprStmtNode>(line, column, std::move(expr));
 }
 
 std::unique_ptr<BlockStmtNode> Parser::parseBlock() {
@@ -420,8 +433,10 @@ std::unique_ptr<ForStmtNode> Parser::parseForStatement() {
         } else {
             auto expr = parseExpression();
             if (expr) {
+                int line = expr->getLine();
+                int column = expr->getColumn();
                 forStmt->setInit(std::make_unique<ExprStmtNode>(
-                    expr->getLine(), expr->getColumn(), std::move(expr)
+                    line, column, std::move(expr)
                 ));
             }
         }
@@ -750,6 +765,10 @@ std::unique_ptr<ExpressionNode> Parser::parsePostfix() {
                 UnaryOp::POST_DEC, std::move(expr)
             );
         } else if (match(TokenType::LBRACKET)) {
+            Token lbracket = previous();
+            int line = expr->getLine();
+            int column = expr->getColumn();
+            
             auto index = parseExpression();
             if (!index) {
                 errorReporter.reportExpectedExpression(peek().line, peek().column, peek().lexeme);
@@ -758,7 +777,7 @@ std::unique_ptr<ExpressionNode> Parser::parsePostfix() {
                 errorReporter.reportMissingBracket(peek().line, peek().column);
             }
             expr = std::make_unique<IndexExprNode>(
-                expr->getLine(), expr->getColumn(),
+                line, column,
                 std::move(expr), std::move(index)
             );
         } else if (match(TokenType::DOT)) {

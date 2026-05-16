@@ -14,6 +14,7 @@
 #include "ir/IRGenerator.hpp"
 #include "ir/SSABuilder.hpp"
 #include "codegen/X86Generator.hpp"
+#include "ir/LoopOptimizer.hpp"
 
 using namespace minicompiler;
 
@@ -38,6 +39,7 @@ struct Options {
     bool stats = false;
     bool json = false;
     bool semantic = false;
+    bool optimize = false;
 };
 
 void printUsage(const char* programName) {
@@ -117,6 +119,7 @@ Options parseOptions(int argc, char* argv[]) {
             {"output", required_argument, 0, 'o'},
             {"verbose", no_argument, 0, 'v'},
             {"stats", no_argument, 0, 's'},
+            {"optimize", no_argument, 0, 'O'},
             {0, 0, 0, 0}
         };
         
@@ -687,6 +690,12 @@ bool runCodegen(const std::string& filename, const Options& opts) {
             return false;
         }
         
+        // Loop optimization (SPRINT 6 SHOULD)
+        LoopOptimizer loopOpt;
+        loopOpt.setMoveInvariants(true);
+        loopOpt.setOptimizeCounted(true);
+        loopOpt.optimize(*irProgram);
+
         // Генерация x86-64 кода
         X86Generator x86Gen(analyzer.getSymbolTable(), errorReporter);
         x86Gen.setSyntaxNASM();

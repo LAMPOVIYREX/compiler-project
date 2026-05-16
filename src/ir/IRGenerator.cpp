@@ -10,8 +10,8 @@ IRGenerator::IRGenerator(SymbolTable& symbolTable, ErrorReporter& errorReporter)
     program = std::make_unique<IRProgram>();
 }
 
-std::unique_ptr<IRProgram> IRGenerator::generate(ProgramNode& program) {
-    program.accept(*this);
+std::unique_ptr<IRProgram> IRGenerator::generate(ProgramNode& programNode) {
+    programNode.accept(*this);
     return std::move(this->program);
 }
 
@@ -34,59 +34,6 @@ IROperand IRGenerator::generateExpression(ExpressionNode* expr) {
     return result;
 }
 
-IROperand IRGenerator::generateBinaryOp(BinaryOp op, const IROperand& left, 
-                                         const IROperand& right, int line) {
-    IROperand result = newTemp();
-    IROpcode irOp;
-    
-    switch (op) {
-        case BinaryOp::ADD: irOp = IROpcode::ADD; break;
-        case BinaryOp::SUB: irOp = IROpcode::SUB; break;
-        case BinaryOp::MUL: irOp = IROpcode::MUL; break;
-        case BinaryOp::DIV: irOp = IROpcode::DIV; break;
-        case BinaryOp::MOD: irOp = IROpcode::MOD; break;
-        case BinaryOp::EQ: irOp = IROpcode::CMP_EQ; break;
-        case BinaryOp::NE: irOp = IROpcode::CMP_NE; break;
-        case BinaryOp::LT: irOp = IROpcode::CMP_LT; break;
-        case BinaryOp::LE: irOp = IROpcode::CMP_LE; break;
-        case BinaryOp::GT: irOp = IROpcode::CMP_GT; break;
-        case BinaryOp::GE: irOp = IROpcode::CMP_GE; break;
-        case BinaryOp::AND: irOp = IROpcode::AND; break;
-        case BinaryOp::OR: irOp = IROpcode::OR; break;
-        case BinaryOp::ASSIGN:
-        case BinaryOp::ADD_ASSIGN:
-        case BinaryOp::SUB_ASSIGN:
-        case BinaryOp::MUL_ASSIGN:
-        case BinaryOp::DIV_ASSIGN:
-        case BinaryOp::MOD_ASSIGN:
-            return left;
-        default:
-            reportError(line, 0, "Unknown binary operator");
-            return result;
-    }
-    
-    emit(irOp, result, left, right);
-    return result;
-}
-
-IROperand IRGenerator::generateUnaryOp(UnaryOp op, const IROperand& operand, int line) {
-    IROperand result = newTemp();
-    
-    switch (op) {
-        case UnaryOp::NEG:
-            emit(IROpcode::NEG, result, operand);
-            break;
-        case UnaryOp::NOT:
-            emit(IROpcode::NOT, result, operand);
-            break;
-        default:
-            reportError(line, 0, "Unknown unary operator");
-            break;
-    }
-    
-    return result;
-}
-
 //=============================================================================
 // Управление потоком
 //=============================================================================
@@ -102,12 +49,10 @@ void IRGenerator::emitCondJump(const IROperand& cond, const std::string& trueTar
 }
 
 void IRGenerator::emitLabel(const std::string& name) {
-    
     if (currentBlock && currentBlock->name == name) {
         return;
     }
     currentBlock = currentFunction->createBlock(name);
-    
 }
 
 void IRGenerator::emit(IROpcode op, const IROperand& dest,
@@ -115,15 +60,6 @@ void IRGenerator::emit(IROpcode op, const IROperand& dest,
                        const std::string& comment) {
     if (!currentBlock) {
         reportError(0, 0, "No current block");
-        return;
-    }
-    
-    // Для MOVE с временной переменной и литералом
-    if (op == IROpcode::MOVE && src1.isConstant()) {
-        // Если присваивание константы переменной
-        auto instr = std::make_unique<IRInstruction>(op, dest, src1, src2);
-        instr->comment = comment;
-        currentBlock->addInstruction(std::move(instr));
         return;
     }
     
@@ -153,28 +89,6 @@ IRType IRGenerator::convertType(const Type& type) {
     }
 }
 
-IROperand IRGenerator::convertOperand(const IROperand& operand, IRType targetType) {
-    if (operand.type == targetType) {
-        return operand;
-    }
-    
-    // int → float (расширение)
-    if (operand.type == IRType::INT && targetType == IRType::FLOAT) {
-        IROperand result = newTemp(targetType);
-        emit(IROpcode::COPY, result, operand);
-        return result;
-    }
-    
-    // float → int (сужение)
-    if (operand.type == IRType::FLOAT && targetType == IRType::INT) {
-        IROperand result = newTemp(targetType);
-        emit(IROpcode::COPY, result, operand);
-        return result;
-    }
-    
-    return operand;
-}
-
 //=============================================================================
 // AST Visitor методы
 //=============================================================================
@@ -198,7 +112,7 @@ void IRGenerator::visit(FunctionDeclNode& node) {
         varMap[param.second] = paramOp;
     }
     
-    // Создаем entry блок (без лишней LABEL инструкции)
+    // Создаем entry блок
     currentBlock = currentFunction->createBlock("entry");
     
     // Генерируем тело функции
@@ -206,7 +120,7 @@ void IRGenerator::visit(FunctionDeclNode& node) {
         node.body->accept(*this);
     }
     
-    // Если функция void, добавляем return в конце
+    // Если функция void и нет return, добавляем
     if (returnType == IRType::VOID && !currentBlock->isTerminated()) {
         emit(IROpcode::RETURN);
     }
@@ -215,10 +129,9 @@ void IRGenerator::visit(FunctionDeclNode& node) {
     currentBlock = nullptr;
 }
 
-// В src/ir/IRGenerator.cpp:
 void IRGenerator::visit(StructDeclNode& node) {
-    (void)node;  
-   
+    (void)node;
+    // Структуры пока не генерируем в IR
 }
 
 void IRGenerator::visit(BlockStmtNode& node) {
@@ -232,33 +145,38 @@ void IRGenerator::visit(VarDeclStmtNode& node) {
     IROperand var = IROperand::variable(node.name, varType);
     varMap[node.name] = var;
     
-    if (node.initializer) {
-        if (auto call = dynamic_cast<CallExprNode*>(node.initializer.get())) {
-            // Вызов функции для инициализации переменной
-            for (size_t i = 0; i < call->arguments.size(); i++) {
-                IROperand arg = generateExpression(call->arguments[i].get());
-                emit(IROpcode::PARAM, IROperand(), arg);
-            }
-            IROperand result = newTemp();
-            emit(IROpcode::CALL, result, IROperand::label(call->callee));
-            emit(IROpcode::MOVE, var, result);
-        } else {
-            IROperand init = generateExpression(node.initializer.get());
-            init = convertOperand(init, varType);
-            emit(IROpcode::MOVE, var, init);
+    // Для массивов выделяем память
+    if (node.varType.isArray()) {
+        int arraySize = node.varType.arraySize;
+        if (arraySize > 0) {
+            emit(IROpcode::ALLOCA, var, IROperand::literal(arraySize * 8), IROperand(),
+                 "allocate array " + node.name + "[" + std::to_string(arraySize) + "]");
         }
+        return;
+    }
+    
+    if (node.initializer) {
+        IROperand init = generateExpression(node.initializer.get());
+        init = convertOperand(init, varType);
+        emit(IROpcode::MOVE, var, init);
     }
 }
 
+
+
 void IRGenerator::visit(IfStmtNode& node) {
     IROperand cond = generateExpression(node.condition.get());
-    cond = convertOperand(cond, IRType::BOOL);
     
     std::string thenLabel = "then_" + std::to_string(currentFunction->tempCounter++);
     std::string elseLabel = "else_" + std::to_string(currentFunction->tempCounter++);
     std::string endLabel = "endif_" + std::to_string(currentFunction->tempCounter++);
     
-    emitCondJump(cond, thenLabel, elseLabel);
+    // Если есть else ветка
+    if (node.elseBranch) {
+        emit(IROpcode::JUMP_IF_NOT, IROperand(), cond, IROperand::label(elseLabel));
+    } else {
+        emit(IROpcode::JUMP_IF_NOT, IROperand(), cond, IROperand::label(endLabel));
+    }
     
     // Then branch
     emitLabel(thenLabel);
@@ -267,13 +185,13 @@ void IRGenerator::visit(IfStmtNode& node) {
         emitJump(endLabel);
     }
     
-    // Else branch (if exists)
-    emitLabel(elseLabel);
+    // Else branch
     if (node.elseBranch) {
+        emitLabel(elseLabel);
         node.elseBranch->accept(*this);
-    }
-    if (!currentBlock->isTerminated()) {
-        emitJump(endLabel);
+        if (!currentBlock->isTerminated()) {
+            emitJump(endLabel);
+        }
     }
     
     // End label
@@ -285,25 +203,31 @@ void IRGenerator::visit(WhileStmtNode& node) {
     std::string bodyLabel = loopLabel + "_body";
     std::string exitLabel = "exit_" + std::to_string(currentFunction->tempCounter++);
     
-    currentBlock = currentFunction->createBlock(loopLabel);
+    // Переход на проверку условия
+    emitJump(loopLabel);
+    
+    // Метка условия
+    emitLabel(loopLabel);
     
     IROperand cond = generateExpression(node.condition.get());
-    cond = convertOperand(cond, IRType::BOOL);
-    
-    // Если условие ложно, переходим на выход
     emit(IROpcode::JUMP_IF_NOT, IROperand(), cond, IROperand::label(exitLabel));
     
-    currentBlock = currentFunction->createBlock(bodyLabel);
+    // Тело цикла
+    emitLabel(bodyLabel);
     node.body->accept(*this);
     if (!currentBlock->isTerminated()) {
         emitJump(loopLabel);
     }
     
-    currentBlock = currentFunction->createBlock(exitLabel);
+    // Выход из цикла
+    emitLabel(exitLabel);
 }
 
 void IRGenerator::visit(ForStmtNode& node) {
-    // Инициализация
+    // For разворачивается в while:
+    // init; while (condition) { body; update; }
+    
+    // Init
     if (node.init) {
         node.init->accept(*this);
     }
@@ -312,25 +236,25 @@ void IRGenerator::visit(ForStmtNode& node) {
     std::string bodyLabel = loopLabel + "_body";
     std::string exitLabel = "exit_" + std::to_string(currentFunction->tempCounter++);
     
-    currentBlock = currentFunction->createBlock(loopLabel);
+    // Переход на проверку условия
+    emitJump(loopLabel);
     
-    // Условие
+    // Метка условия
+    emitLabel(loopLabel);
+    
+    // Condition
     if (node.condition) {
         IROperand cond = generateExpression(node.condition.get());
-        cond = convertOperand(cond, IRType::BOOL);
-        IROperand temp = newTemp(IRType::BOOL);
-        emit(IROpcode::CMP_NE, temp, cond, IROperand::literal(0));
-        emit(IROpcode::JUMP_IF, IROperand(), temp, IROperand::label(bodyLabel));
-        emitJump(exitLabel);
+        emit(IROpcode::JUMP_IF_NOT, IROperand(), cond, IROperand::label(exitLabel));
     }
     
     // Тело
-    currentBlock = currentFunction->createBlock(bodyLabel);
+    emitLabel(bodyLabel);
     if (node.body) {
         node.body->accept(*this);
     }
     
-    // Обновление
+    // Update
     if (node.update) {
         node.update->accept(*this);
     }
@@ -339,13 +263,13 @@ void IRGenerator::visit(ForStmtNode& node) {
         emitJump(loopLabel);
     }
     
-    currentBlock = currentFunction->createBlock(exitLabel);
+    // Выход
+    emitLabel(exitLabel);
 }
 
 void IRGenerator::visit(ReturnStmtNode& node) {
     if (node.value) {
         IROperand value = generateExpression(node.value.get());
-        value = convertOperand(value, currentFunction->returnType);
         emit(IROpcode::RETURN, IROperand(), value);
     } else {
         emit(IROpcode::RETURN);
@@ -354,20 +278,16 @@ void IRGenerator::visit(ReturnStmtNode& node) {
 
 void IRGenerator::visit(ExprStmtNode& node) {
     if (node.expression) {
-        // Генерируем выражение, но результат нам не нужен
         if (auto call = dynamic_cast<CallExprNode*>(node.expression.get())) {
-            // Для вызова функции без сохранения результата
             for (size_t i = 0; i < call->arguments.size(); i++) {
                 IROperand arg = generateExpression(call->arguments[i].get());
                 emit(IROpcode::PARAM, IROperand(), arg);
             }
             IROperand result = newTemp();
             emit(IROpcode::CALL, result, IROperand::label(call->callee));
-            // Результат игнорируем
         } else {
             generateExpression(node.expression.get());
         }
-        // Очищаем стек
         while (!valueStack.empty()) {
             valueStack.pop();
         }
@@ -393,7 +313,6 @@ void IRGenerator::visit(LiteralExprNode& node) {
 void IRGenerator::visit(IdentifierExprNode& node) {
     auto it = varMap.find(node.name);
     if (it != varMap.end()) {
-        // Просто передаем переменную, не загружая её
         valueStack.push(it->second);
     } else {
         reportError(node.getLine(), node.getColumn(), "Undeclared variable: " + node.name);
@@ -402,15 +321,119 @@ void IRGenerator::visit(IdentifierExprNode& node) {
 }
 
 void IRGenerator::visit(BinaryExprNode& node) {
+    // ============================================================
+    // SHORT-CIRCUIT EVALUATION FOR LOGICAL AND (&&)
+    // ============================================================
+    if (node.op == BinaryOp::AND) {
+        std::string scTrueLabel = "sc_true_" + std::to_string(currentFunction->tempCounter++);
+        std::string scFalseLabel = "sc_false_" + std::to_string(currentFunction->tempCounter++);
+        std::string scEndLabel = "sc_end_" + std::to_string(currentFunction->tempCounter++);
+        
+        IROperand result = newTemp(IRType::BOOL);
+        
+        // Вычисляем левую часть
+        IROperand left = generateExpression(node.left.get());
+        
+        // Если левая часть false — переходим на false метку (короткое замыкание)
+        emit(IROpcode::JUMP_IF_NOT, IROperand(), left, IROperand::label(scFalseLabel));
+        
+        // Иначе вычисляем правую часть
+        IROperand right = generateExpression(node.right.get());
+        emit(IROpcode::MOVE, result, right);
+        emitJump(scEndLabel);
+        
+        // False: результат = 0
+        emitLabel(scFalseLabel);
+        emit(IROpcode::MOVE, result, IROperand::literal(0));
+        
+        emitLabel(scEndLabel);
+        valueStack.push(result);
+        return;
+    }
+    
+    // ============================================================
+    // SHORT-CIRCUIT EVALUATION FOR LOGICAL OR (||)
+    // ============================================================
+    if (node.op == BinaryOp::OR) {
+        std::string scTrueLabel = "sc_true_" + std::to_string(currentFunction->tempCounter++);
+        std::string scEndLabel = "sc_end_" + std::to_string(currentFunction->tempCounter++);
+        
+        IROperand result = newTemp(IRType::BOOL);
+        
+        // Вычисляем левую часть
+        IROperand left = generateExpression(node.left.get());
+        
+        // Если левая часть true — переходим на true метку (короткое замыкание)
+        emit(IROpcode::JUMP_IF, IROperand(), left, IROperand::label(scTrueLabel));
+        
+        // Иначе вычисляем правую часть
+        IROperand right = generateExpression(node.right.get());
+        emit(IROpcode::MOVE, result, right);
+        emitJump(scEndLabel);
+        
+        // True: результат = 1
+        emitLabel(scTrueLabel);
+        emit(IROpcode::MOVE, result, IROperand::literal(1));
+        
+        emitLabel(scEndLabel);
+        valueStack.push(result);
+        return;
+    }
+    
+    // ============================================================
     // Присваивание
+    // ============================================================
     if (node.op == BinaryOp::ASSIGN) {
         IROperand right = generateExpression(node.right.get());
         
+        // ============================================================
+        // Присваивание в элемент массива: arr[i] = value
+        // ============================================================
+        // В IRGenerator::visit(BinaryExprNode&) для ASSIGN с IndexExprNode:
+        if (auto indexExpr = dynamic_cast<IndexExprNode*>(node.left.get())) {
+            // 1. Вычисляем значение
+            IROperand rightVal = generateExpression(node.right.get());
+            IROperand savedValue = IROperand::variable("__array_val", IRType::INT);
+            emit(IROpcode::MOVE, savedValue, rightVal);
+            
+            // 2. Вычисляем адрес и сохраняем в переменную
+            IROperand base = generateExpression(indexExpr->array.get());
+            IROperand index = generateExpression(indexExpr->index.get());
+            IROperand savedAddr = IROperand::variable("__array_addr", IRType::INT);
+            IROperand offset = newTemp();
+            IROperand addr = newTemp();
+            emit(IROpcode::MUL, offset, index, IROperand::literal(8));
+            emit(IROpcode::ADD, addr, base, offset);
+            emit(IROpcode::MOVE, savedAddr, addr);  // сохраняем адрес
+            
+            // 3. STORE использует переменные (не TEMP)
+            emit(IROpcode::STORE, savedAddr, savedValue);
+            valueStack.push(rightVal);
+            return;
+        }
+        
+        // ============================================================
+        // Присваивание в поле структуры: obj.field = value
+        // ============================================================
+        if (auto memberExpr = dynamic_cast<MemberAccessExprNode*>(node.left.get())) {
+            IROperand addr = generateExpression(memberExpr);
+            emit(IROpcode::STORE, addr, right, IROperand(), "store to struct field");
+            valueStack.push(right);
+            return;
+        }
+        
+        // ============================================================
+        // Присваивание в переменную
+        // ============================================================
         IROperand left;
         if (auto id = dynamic_cast<IdentifierExprNode*>(node.left.get())) {
             auto it = varMap.find(id->name);
             if (it != varMap.end()) {
                 left = it->second;
+            } else {
+                reportError(node.getLine(), node.getColumn(), "Undeclared variable: " + id->name);
+                valueStack.push(right);
+                return;
             }
         } else {
             left = generateExpression(node.left.get());
@@ -422,7 +445,9 @@ void IRGenerator::visit(BinaryExprNode& node) {
         return;
     }
     
+    // ============================================================
     // Обычные бинарные операции
+    // ============================================================
     IROperand left = generateExpression(node.left.get());
     IROperand right = generateExpression(node.right.get());
     
@@ -450,8 +475,6 @@ void IRGenerator::visit(BinaryExprNode& node) {
         case BinaryOp::LE: irOp = IROpcode::CMP_LE; break;
         case BinaryOp::GT: irOp = IROpcode::CMP_GT; break;
         case BinaryOp::GE: irOp = IROpcode::CMP_GE; break;
-        case BinaryOp::AND: irOp = IROpcode::AND; break;
-        case BinaryOp::OR: irOp = IROpcode::OR; break;
         default:
             reportError(node.getLine(), node.getColumn(), "Unknown binary operator");
             valueStack.push(result);
@@ -464,7 +487,20 @@ void IRGenerator::visit(BinaryExprNode& node) {
 
 void IRGenerator::visit(UnaryExprNode& node) {
     IROperand operand = generateExpression(node.operand.get());
-    IROperand result = generateUnaryOp(node.op, operand, node.getLine());
+    IROperand result = newTemp(IRType::BOOL);
+    
+    switch (node.op) {
+        case UnaryOp::NEG:
+            emit(IROpcode::NEG, result, operand);
+            break;
+        case UnaryOp::NOT:
+            emit(IROpcode::NOT, result, operand);
+            break;
+        default:
+            result = operand;
+            break;
+    }
+    
     valueStack.push(result);
 }
 
@@ -479,55 +515,100 @@ void IRGenerator::visit(CallExprNode& node) {
     IROperand result = newTemp();
     emit(IROpcode::CALL, result, IROperand::label(node.callee));
     
-    // Сохраняем результат на стеке
     valueStack.push(result);
 }
 
 void IRGenerator::visit(IndexExprNode& node) {
-    // Генерируем базовый адрес
-    IROperand array = generateExpression(node.array.get());
-    
-    // Генерируем индекс
+    IROperand base = generateExpression(node.array.get());
     IROperand index = generateExpression(node.index.get());
     
-    // Создаем временную переменную для адреса элемента
-    IROperand elementAddr = newTemp(IRType::INT);
-    IROperand elementSize = IROperand::literal(4); // размер int
+    IROperand addr = newTemp();
+    IROperand offset = newTemp();
     
-    // Вычисляем смещение: index * elementSize
-    IROperand offset = newTemp(IRType::INT);
-    emit(IROpcode::MUL, offset, index, elementSize, "смещение элемента массива");
+    emit(IROpcode::MUL, offset, index, IROperand::literal(8), "offset = index * 8");
+    emit(IROpcode::ADD, addr, base, offset, "address = base + offset");
     
-    // Вычисляем адрес: array + offset
-    emit(IROpcode::ADD, elementAddr, array, offset, "адрес элемента массива");
+    // ВСЕГДА делаем LOAD — возвращаем ЗНАЧЕНИЕ, не адрес
+    IROperand value = newTemp();
+    emit(IROpcode::LOAD, value, addr, IROperand(), "load from array");
     
-    // Загружаем значение
-    IROperand result = newTemp(IRType::INT);
-    emit(IROpcode::LOAD, result, elementAddr, IROperand(), "загрузка из массива");
-    
-    valueStack.push(result);
+    valueStack.push(value);  // возвращаем значение
 }
 
 void IRGenerator::visit(MemberAccessExprNode& node) {
-    // Генерируем адрес объекта
-    IROperand object = generateExpression(node.object.get());
-    
-    // Создаем временную переменную для адреса поля
-    IROperand fieldAddr = newTemp(IRType::INT);
-    
-    // Временное решение - просто копируем адрес
-    // TODO: Добавить реальное вычисление смещения из SymbolTable
-    emit(IROpcode::MOVE, fieldAddr, object, IROperand(), "доступ к полю " + node.member);
-    
-    // Загружаем значение
-    IROperand result = newTemp(IRType::INT);
-    emit(IROpcode::LOAD, result, fieldAddr, IROperand(), "загрузка поля " + node.member);
-    
-    valueStack.push(result);
+    // Заглушка для структур
+    reportError(node.getLine(), node.getColumn(), "Structs not yet supported in IR");
+    valueStack.push(newTemp());
 }
 
 void IRGenerator::dumpIR() {
     std::cout << program->toString() << std::endl;
+}
+
+IROperand IRGenerator::convertOperand(const IROperand& operand, IRType targetType) {
+    if (operand.type == targetType) {
+        return operand;
+    }
+    
+    if (operand.type == IRType::INT && targetType == IRType::FLOAT) {
+        IROperand result = newTemp(targetType);
+        emit(IROpcode::COPY, result, operand);
+        return result;
+    }
+    
+    if (operand.type == IRType::FLOAT && targetType == IRType::INT) {
+        IROperand result = newTemp(targetType);
+        emit(IROpcode::COPY, result, operand);
+        return result;
+    }
+    
+    return operand;
+}
+
+IROperand IRGenerator::generateBinaryOp(BinaryOp op, const IROperand& left, 
+                                         const IROperand& right, int line) {
+    IROperand result = newTemp();
+    IROpcode irOp;
+    
+    switch (op) {
+        case BinaryOp::ADD: irOp = IROpcode::ADD; break;
+        case BinaryOp::SUB: irOp = IROpcode::SUB; break;
+        case BinaryOp::MUL: irOp = IROpcode::MUL; break;
+        case BinaryOp::DIV: irOp = IROpcode::DIV; break;
+        case BinaryOp::MOD: irOp = IROpcode::MOD; break;
+        case BinaryOp::EQ: irOp = IROpcode::CMP_EQ; break;
+        case BinaryOp::NE: irOp = IROpcode::CMP_NE; break;
+        case BinaryOp::LT: irOp = IROpcode::CMP_LT; break;
+        case BinaryOp::LE: irOp = IROpcode::CMP_LE; break;
+        case BinaryOp::GT: irOp = IROpcode::CMP_GT; break;
+        case BinaryOp::GE: irOp = IROpcode::CMP_GE; break;
+        case BinaryOp::AND: irOp = IROpcode::AND; break;
+        case BinaryOp::OR: irOp = IROpcode::OR; break;
+        default:
+            reportError(line, 0, "Unknown binary operator");
+            return result;
+    }
+    
+    emit(irOp, result, left, right);
+    return result;
+}
+
+IROperand IRGenerator::generateUnaryOp(UnaryOp op, const IROperand& operand, int line) {
+    IROperand result = newTemp();
+    
+    switch (op) {
+        case UnaryOp::NEG:
+            emit(IROpcode::NEG, result, operand);
+            break;
+        case UnaryOp::NOT:
+            emit(IROpcode::NOT, result, operand);
+            break;
+        default:
+            reportError(line, 0, "Unknown unary operator");
+            break;
+    }
+    
+    return result;
 }
 
 } // namespace minicompiler

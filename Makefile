@@ -32,13 +32,18 @@ SEMANTIC_SRCS = src/semantic/SymbolTable.cpp src/semantic/SemanticAnalyzer.cpp
 # ============================================
 # Исходные файлы (Спринт 4 - IR и SSA)
 # ============================================
-IR_SRCS = src/ir/IR.cpp src/ir/IRGenerator.cpp
+# Добавить в IR_SRCS:
+IR_SRCS = src/ir/IR.cpp src/ir/IRGenerator.cpp src/ir/LoopOptimizer.cpp
 SSA_SRCS = src/ir/SSA.cpp src/ir/SSABuilder.cpp
 
 # ============================================
 # Исходные файлы (Спринт 5 - Кодогенерация x86-64)
 # ============================================
-CODEGEN_SRCS = src/codegen/X86Generator.cpp
+# Исходные файлы кодогенерации (Sprint 5-6)
+CODEGEN_SRCS = src/codegen/X86Generator.cpp \
+               src/codegen/LabelManager.cpp \
+               src/codegen/StackFrame.cpp \
+               src/codegen/AssemblyEmitter.cpp
 CODEGEN_OBJS = $(CODEGEN_SRCS:.cpp=.o)
 
 # ============================================

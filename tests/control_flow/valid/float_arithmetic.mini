@@ -1,0 +1,23 @@
+fn main() -> int {
+    float a = 3.5;
+    float b = 2.0;
+    float c = a + b;
+    float d = a - b;
+    float e = a * b;
+    float f = a / b;
+    float five = 5.0;
+    float two = 2.0;
+    float six = 6.0;
+    float one = 1.0;
+    
+    if (c > five) {
+        if (d < two) {
+            if (e > six) {
+                if (f > one) {
+                    return 42;
+                }
+            }
+        }
+    }
+    return 0;
+}
