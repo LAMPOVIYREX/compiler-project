@@ -48,7 +48,7 @@
 - **SSA форма** (Static Single Assignment) с переименованием переменных
 - Constant folding и Dead code elimination (базовая реализация)
 - Текстовый дампер IR для отладки
-- 15 тестов IR (12 валидных + 3 с ошибками) + 2 теста SSA
+- 17 тестов IR (12 валидных + 3 с ошибками) + 2 теста SSA
 
 #### Спринт 5: Генерация кода x86-64
 - Генерация нативного ассемблерного кода x86-64 (NASM синтаксис)
@@ -73,6 +73,23 @@
 - Сложные булевы выражения с сохранением short-circuit семантики
 - Type promotion для смешанных выражений (int + float → float)
 - 26 тестов: control flow (7), logical (3), float (3), arrays (3), integration (10)
+
+#### Спринт 7: Продвинутые возможности и внешние вызовы
+- **Расширенные оптимизации IR**:
+  - Constant Folding (свёртка констант) — до 3 проходов
+  - Constant Propagation (распространение констант) — замена переменных известными значениями
+  - Dead Code Elimination (удаление мёртвого кода) — код после `return`/`jump`
+  - Algebraic Simplification (алгебраические упрощения) — `x+0→x`, `x*1→x`, `x*0→0` и др.
+  - Итеративный pipeline: оптимизации применяются циклически до стабилизации
+- **Поддержка внешних вызовов (External Functions)**:
+  - Объявление `extern`-функций с проверкой типов
+  - Корректная обработка variadic-функций (`printf`, `scanf`)
+  - Полная интеграция с libc: `printf`, `puts`, `malloc`, `free`, `memcpy`, `memset`, `strlen`, `strcmp`, `strcpy`, `sqrtf`, `sinf`, `cosf`
+  - Соблюдение System V AMD64 ABI для внешних вызовов (регистры, выравнивание стека, `AL=0` для variadic)
+- **Демонстрационная программа** `tests/demo/extern_demo.mini` — показывает работу 10 внешних функций одновременно
+- **Статистика оптимизаций** выводится при флаге `--stats`
+- **Флаг `--optimize`** для включения всех оптимизаций
+- 41 тест кодогенерации (включая массивы, float, внешние вызовы, оптимизации)
 
 ---
 
@@ -162,6 +179,7 @@ make clean
 --output <file>            # Выходной файл (по умолчанию: stdout)
 --verbose                  # Показать токены, AST, таблицу символов и Memory Layout
 --stats                    # Показать статистику компиляции
+--optimize                 # Включить оптимизации (только для codegen)
 ```
 
 ### Makefile цели
@@ -176,10 +194,11 @@ make clean
 | `make test-semantic` | Запустить тесты семантики (Спринт 3) |
 | `make test-ir` | Запустить тесты IR (Спринт 4) |
 | `make test-ssa` | Запустить тесты SSA формы |
-| `make test-codegen` | Запустить все тесты кодогенерации (Спринт 5-6) |
-| `make test-all` | Запустить все тесты (104 теста) |
+| `make test-codegen` | Запустить все тесты кодогенерации (Спринт 5-7) |
+| `make test-all` | Запустить все тесты (127+ тестов) |
 | `make check-all` | Проверить все примеры на всех этапах |
 | `make build-and-run FILE=x.mini` | Скомпилировать и запустить программу |
+| `make build-and-run-extern FILE=x.mini` | Скомпилировать с libc и запустить (для extern-программ) |
 | `make ast-file FILE=x` | Визуализация AST для указанного файла |
 | `make help` | Показать справку |
 
@@ -331,6 +350,36 @@ fn main() -> int {
     ; ...
 ```
 
+**Внешние вызовы (Extern):**
+```c
+extern printf(string format, ...) -> int;
+extern malloc(int size) -> int;
+extern free(int ptr) -> int;
+
+fn main() -> int {
+    printf("Hello from MiniLang!\n");
+    int ptr = malloc(100);
+    if (ptr != 0) {
+        free(ptr);
+        printf("malloc+free works!\n");
+    }
+    return 42;
+}
+```
+```asm
+    extern printf
+    extern malloc
+    extern free
+    ...
+    lea rdi, [rel L.str0]    ; param 1: string
+    xor eax, eax             ; variadic: AL = 0
+    call printf
+    mov rdi, 100             ; param 1: size
+    call malloc
+    ; ...
+    call free
+```
+
 ### Runtime библиотека
 
 Библиотека `src/runtime/runtime.asm` предоставляет:
@@ -355,20 +404,24 @@ fn main() -> int {
 
 ```bash
 # 1. Компиляция MiniLang → ассемблер
-./minicompiler codegen program.mini --output program.asm
+./minicompiler codegen program.mini --optimize --output program.asm
 
 # 2. Ассемблирование
 nasm -f elf64 program.asm -o program.o
 
-# 3. Линковка с рантаймом
+# 3. Линковка с рантаймом (для программ без extern)
 ld -o program src/runtime/runtime.o program.o
 
-# 4. Запуск
+# 4. Линковка с libc (для программ с extern-функциями)
+gcc -no-pie -o program program.o -lm
+
+# 5. Запуск
 ./program
 echo $?  # Код возврата
 
 # Или одной командой:
 make build-and-run FILE=program.mini
+make build-and-run-extern FILE=program.mini  # для extern-программ
 ```
 
 ---
@@ -398,7 +451,8 @@ minicompiler/
 │   │   ├── IRGenerator.hpp
 │   │   ├── SSA.hpp
 │   │   ├── SSABuilder.hpp
-│   │   └── LoopOptimizer.hpp  # Оптимизация циклов (Sprint 6)
+│   │   ├── Optimizer.hpp     # Основные оптимизации IR
+│   │   └── LoopOptimizer.hpp # Оптимизация циклов (Sprint 6)
 │   ├── codegen/              # Генерация кода x86-64
 │   │   ├── X86Generator.hpp
 │   │   ├── LabelManager.hpp
@@ -411,6 +465,7 @@ minicompiler/
 │   ├── preprocessor/
 │   ├── semantic/
 │   ├── ir/
+│   │   ├── Optimizer.cpp     # Constant Folding, Propagation, DCE, Algebraic Simplification
 │   │   └── LoopOptimizer.cpp
 │   ├── codegen/
 │   │   ├── X86Generator.cpp
@@ -424,11 +479,14 @@ minicompiler/
 ├── tests/                      # Тесты
 │   ├── lexer/                  # 36 тестов (Спринт 1)
 │   ├── parser/                 # 16 тестов (Спринт 2)
-│   ├── semantic/               # 15 тестов (Спринт 3)
+│   ├── semantic/               # 17 тестов (Спринт 3)
 │   ├── ir/                     # 17 тестов (Спринт 4)
-│   ├── codegen/                # 13 тестов (Спринт 5)
-│   └── control_flow/           # 7 тестов (Спринт 6)
-│       └── valid/
+│   ├── codegen/                # Скрипт и тесты кодогенерации (Спринт 5)
+│   ├── control_flow/           # 7 тестов (Спринт 6)
+│   ├── optimization/           # Тесты оптимизаций (Спринт 7)
+│   │   ├── valid/              # Внешние вызовы, математика, строки
+│   │   └── demo/               # Демонстрационные примеры всех оптимизаций
+│   └── demo/                   # Демо-программы
 ├── Makefile
 ├── README.md
 └── .gitignore
@@ -488,17 +546,23 @@ minicompiler/
 - [x] Loop optimization (инварианты, counted loops, минимизация jump)
 - [x] 26 тестов control flow/float/arrays
 
-### Спринт 7 (Планируется)
-- [ ] Продвинутые оптимизации IR
-- [ ] Интеграция с libc (printf, malloc)
-- [ ] Простое распределение регистров
-- [ ] Профилирование и бенчмарки
+### Спринт 7 (Завершен)
+- [x] Constant Folding (свёртка констант) — до 3 проходов
+- [x] Constant Propagation (распространение констант) — замена переменных
+- [x] Dead Code Elimination (удаление мёртвого кода)
+- [x] Algebraic Simplification (алгебраические упрощения): `x+0→x`, `x*1→x`, `x*0→0`
+- [x] Итеративный оптимизационный pipeline с флагом `--optimize`
+- [x] Внешние вызовы (`extern`) с поддержкой variadic-функций
+- [x] Интеграция с libc: `printf`, `puts`, `malloc`, `free`, `memcpy`, `memset`, `strlen`, `strcmp`, `strcpy`, `sqrtf`, `sinf`, `cosf`
+- [x] Демонстрационная программа с 10 extern-функциями
+- [x] Статистика оптимизаций при `--stats`
+- [x] 41 тест кодогенерации (включая extern и оптимизации)
 
 ### Спринт 8 (Планируется)
-- [ ] Консолидированный вывод ошибок
-- [ ] Всеобъемлющее тестирование
-- [ ] Финальная документация
-- [ ] Демонстрационная программа
+- [ ] Консолидированный вывод ошибок с кодами
+- [ ] Система предупреждений (`-Wall`, `-Werror`)
+- [ ] Финальная документация и туториал
+- [ ] Презентационные материалы
 
 ---
 
@@ -587,6 +651,39 @@ fn main() -> int {
 }
 ```
 
+### Пример 8: Внешние вызовы (Extern)
+```c
+extern printf(string format, ...) -> int;
+extern malloc(int size) -> int;
+extern free(int ptr) -> int;
+extern strlen(string s) -> int;
+extern strcmp(string s1, string s2) -> int;
+extern strcpy(int dest, string src) -> int;
+extern memcpy(int dest, int src, int n) -> int;
+extern memset(int ptr, int value, int n) -> int;
+
+fn main() -> int {
+    printf("=== MiniLang External Functions Demo ===\n");
+    
+    int p1 = malloc(100);
+    int p2 = malloc(200);
+    memset(p1, 0, 100);
+    memcpy(p2, p1, 100);
+    free(p1);
+    free(p2);
+    
+    int len = strlen("MiniLang");
+    printf("strlen = %d\n", len);
+    
+    int cmp = strcmp("abc", "abc");
+    if (cmp == 0) {
+        printf("strcmp works!\n");
+    }
+    
+    return 42;
+}
+```
+
 ---
 
 ## Тестирование
@@ -603,14 +700,13 @@ make test-all
 | Лексер (ошибки) | 11 | ✅ |
 | Парсер (валидные) | 6 | ✅ |
 | Парсер (ошибки) | 10 | ✅ |
-| Семантика (валидные) | 5 | ✅ |
-| Семантика (ошибки) | 10 | ✅ |
+| Семантика (валидные) | 6 | ✅ |
+| Семантика (ошибки) | 11 | ✅ |
 | IR (валидные) | 12 | ✅ |
 | IR (ошибки) | 3 | ✅ |
 | SSA | 2 | ✅ |
-| Кодогенерация Sprint 5 | 13 | ✅ |
-| Кодогенерация Sprint 6 | 7 | ✅ |
-| **Всего** | **104** | ✅ |
+| Кодогенерация (Sprint 5-7) | 41 | ✅ |
+| **Всего** | **127** | ✅ |
 
 ---
 
