@@ -269,6 +269,14 @@ void ASTDotGenerator::visit(IndexExprNode& node) {
     parentStack.pop();
 }
 
+void ASTDotGenerator::visit(InitListExprNode& node) {
+    (void)node;
+}
+
+void ASTDotGenerator::visit(GlobalVarDeclNode& node) {
+    node.varDecl->accept(*this);
+}
+
 void ASTDotGenerator::visit(MemberAccessExprNode& node) {
     std::string label = "MemberAccess\\n." + node.member;
     if (showTypes && nodeTypes.find(&node) != nodeTypes.end()) {

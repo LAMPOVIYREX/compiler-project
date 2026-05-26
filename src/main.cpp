@@ -15,6 +15,7 @@
 #include "ir/SSABuilder.hpp"
 #include "codegen/X86Generator.hpp"
 #include "ir/LoopOptimizer.hpp"
+#include "ir/Optimizer.hpp"
 
 using namespace minicompiler;
 
@@ -148,6 +149,9 @@ Options parseOptions(int argc, char* argv[]) {
                     break;
                 case 's':
                     opts.stats = true;
+                    break;
+                case 'O':
+                    opts.optimize = true;
                     break;
                 default:
                     break;
@@ -689,12 +693,27 @@ bool runCodegen(const std::string& filename, const Options& opts) {
             errorReporter.printErrors();
             return false;
         }
-        
-        // Loop optimization (SPRINT 6 SHOULD)
-        LoopOptimizer loopOpt;
-        loopOpt.setMoveInvariants(true);
-        loopOpt.setOptimizeCounted(true);
-        loopOpt.optimize(*irProgram);
+
+        // Оптимизации IR (только с флагом --optimize)
+        if (opts.optimize) {
+            IROptimizer optimizer;
+            optimizer.setConstantFolding(true);        
+            optimizer.setConstantPropagation(true);    
+            optimizer.setDeadCodeElimination(true);    
+            optimizer.optimize(*irProgram);
+            
+            if (opts.stats) {
+                auto stats = optimizer.getStats();
+                std::cerr << "\n=== Optimization Statistics ===" << std::endl;
+                std::cerr << "  Algebraic simplification: " << stats.algebraicSimplifications << " simplifications" << std::endl;
+                std::cerr << "  Constant folding:     " << stats.foldedConstants << " expressions folded" << std::endl;
+                std::cerr << "  Constant propagation: " << stats.propagatedConstants << " variables propagated" << std::endl;
+                std::cerr << "  Dead code eliminated: " << stats.deadInstructions << " instructions removed" << std::endl;
+                std::cerr << "  Total instructions:   " << stats.totalBefore 
+                          << " -> " << stats.totalAfter 
+                          << " (" << (stats.totalBefore - stats.totalAfter) << " removed)" << std::endl;
+            }
+        }
 
         // Генерация x86-64 кода
         X86Generator x86Gen(analyzer.getSymbolTable(), errorReporter);

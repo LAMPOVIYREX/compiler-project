@@ -1,0 +1,18 @@
+
+=== Optimization Statistics ===
+  Algebraic simplification: 6 simplifications
+  Constant folding:     0 expressions folded
+  Constant propagation: 10 variables propagated
+  Dead code eliminated: 0 instructions removed
+  Total instructions:   12 -> 12 (0 removed)
+
+
+Статистика компиляции:
+   Всего ошибок: 0
+   Лексических: 0
+   Синтаксических: 0
+   Семантических: 0
+   Препроцессора: 0
+   Общих: 0
+   Попыток восстановления: 0
+   Успешных восстановлений: 0

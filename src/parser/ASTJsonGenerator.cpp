@@ -270,6 +270,14 @@ void ASTJsonGenerator::visit(IndexExprNode& node) {
     endObject();
 }
 
+void ASTJsonGenerator::visit(InitListExprNode& node) {
+    (void)node;
+}
+
+void ASTJsonGenerator::visit(GlobalVarDeclNode& node) {
+    node.varDecl->accept(*this);
+}
+
 void ASTJsonGenerator::visit(MemberAccessExprNode& node) {
     beginObject();
     addKey("type");

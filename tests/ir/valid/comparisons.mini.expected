@@ -17,15 +17,18 @@ entry:
   [c5] = MOVE t4
   t5 = CMP_NE [a], [b]
   [c6] = MOVE t5
-  t6 = AND [c1], [c6]
-  JUMP_IF t6, then_7
-  JUMP else_8
+  JUMP_IF_NOT [c1], sc_false_7
+  t9 = MOVE [c6]
+  JUMP sc_end_8
 
-then_7:
+sc_false_7:
+  t9 = MOVE 0
+
+sc_end_8:
+  JUMP_IF_NOT t9, endif_12
+
+then_10:
   RETURN 1
 
-else_8:
-  JUMP endif_9
-
-endif_9:
+endif_12:
   RETURN 0

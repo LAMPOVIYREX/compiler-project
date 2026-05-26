@@ -4,14 +4,10 @@ function isPositive: int ([x])
 
 entry:
   t0 = CMP_GT [x], 0
-  JUMP_IF t0, then_1
-  JUMP else_2
+  JUMP_IF_NOT t0, endif_3
 
 then_1:
   RETURN 1
-
-else_2:
-  JUMP endif_3
 
 endif_3:
   RETURN 0
@@ -22,30 +18,36 @@ entry:
   [a] = MOVE 5
   t0 = NEG 3
   [b] = MOVE t0
-  t1 = CMP_GT [a], 0
-  t2 = CMP_GT [b], 0
-  t3 = AND t1, t2
-  JUMP_IF t3, then_4
-  JUMP else_5
+  t5 = CMP_GT [a], 0
+  JUMP_IF_NOT t5, sc_false_2
+  t6 = CMP_GT [b], 0
+  t4 = MOVE t6
+  JUMP sc_end_3
 
-then_4:
+sc_false_2:
+  t4 = MOVE 0
+
+sc_end_3:
+  JUMP_IF_NOT t4, endif_9
+
+then_7:
   RETURN 1
 
-else_5:
-  JUMP endif_6
+endif_9:
+  t13 = CMP_GT [a], 0
+  JUMP_IF t13, sc_true_10
+  t14 = CMP_GT [b], 0
+  t12 = MOVE t14
+  JUMP sc_end_11
 
-endif_6:
-  t7 = CMP_GT [a], 0
-  t8 = CMP_GT [b], 0
-  t9 = OR t7, t8
-  JUMP_IF t9, then_10
-  JUMP else_11
+sc_true_10:
+  t12 = MOVE 1
 
-then_10:
+sc_end_11:
+  JUMP_IF_NOT t12, endif_17
+
+then_15:
   RETURN 2
 
-else_11:
-  JUMP endif_12
-
-endif_12:
+endif_17:
   RETURN 0

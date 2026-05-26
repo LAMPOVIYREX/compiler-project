@@ -1,0 +1,6 @@
+extern strlen(string s) -> int;
+
+fn main() -> int {
+    int x = strlen(42);
+    return 0;
+}

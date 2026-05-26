@@ -4,14 +4,10 @@ function factorial: int ([n])
 
 entry:
   t0 = CMP_LE [n], 1
-  JUMP_IF t0, then_1
-  JUMP else_2
+  JUMP_IF_NOT t0, endif_3
 
 then_1:
   RETURN 1
-
-else_2:
-  JUMP endif_3
 
 endif_3:
   t4 = SUB [n], 1

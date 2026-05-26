@@ -5,6 +5,7 @@ function main: int ()
 entry:
   [i] = MOVE 0
   [sum] = MOVE 0
+  JUMP loop_0
 
 loop_0:
   t2 = CMP_LT [i], 5

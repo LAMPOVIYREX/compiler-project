@@ -23,6 +23,7 @@ const std::unordered_map<TokenType, std::string> tokenTypeToString = {
     {TokenType::KW_FALSE, "KW_FALSE"},
     {TokenType::KW_STRUCT, "KW_STRUCT"},
     {TokenType::KW_CONST, "KW_CONST"},
+    {TokenType::KW_EXTERN, "KW_EXTERN"},
     
     // Идентификаторы и литералы
     {TokenType::IDENTIFIER, "IDENTIFIER"},
@@ -54,7 +55,7 @@ const std::unordered_map<TokenType, std::string> tokenTypeToString = {
     {TokenType::STAR_EQUAL, "STAR_EQUAL"},
     {TokenType::SLASH_EQUAL, "SLASH_EQUAL"},
     {TokenType::PERCENT_EQUAL, "PERCENT_EQUAL"},
-    {TokenType::ARROW, "ARROW"},  // ДОБАВЛЕНО
+    {TokenType::ARROW, "ARROW"}, 
     
     // Разделители
     {TokenType::LPAREN, "LPAREN"},
@@ -82,11 +83,12 @@ const std::unordered_map<std::string, TokenType> keywords = {
     {"int", TokenType::KW_INT},
     {"float", TokenType::KW_FLOAT},
     {"bool", TokenType::KW_BOOL},
-    {"string", TokenType::KW_STRING},  // ДОБАВЛЕНО
+    {"string", TokenType::KW_STRING},  
     {"true", TokenType::KW_TRUE},
     {"false", TokenType::KW_FALSE},
     {"struct", TokenType::KW_STRUCT},
-    {"const", TokenType::KW_CONST}
+    {"const", TokenType::KW_CONST},
+    {"extern", TokenType::KW_EXTERN}, 
 };
 
 std::string tokenTypeToStringFunc(TokenType type) {

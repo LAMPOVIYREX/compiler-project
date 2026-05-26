@@ -1,0 +1,6 @@
+fn main() -> int {
+    int x = 100;
+    int y = x;
+    int z = y;
+    return z;
+}

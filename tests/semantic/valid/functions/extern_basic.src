@@ -1,0 +1,8 @@
+extern printf(string format, ...) -> int;
+extern malloc(int size) -> int;
+
+fn main() -> int {
+    printf("Hello %d\n", 42);
+    int ptr = malloc(100);
+    return 0;
+}

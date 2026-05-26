@@ -111,7 +111,12 @@ void ASTPrettyPrinter::visit(IndexExprNode& node) {
     decreaseIndent();
 }
 
-// ДОБАВЛЕНО: реализация для MemberAccessExprNode
+void ASTPrettyPrinter::visit(InitListExprNode& node) {
+    (void)node;
+}
+
+
+// реализация для MemberAccessExprNode
 void ASTPrettyPrinter::visit(MemberAccessExprNode& node) {
     indent();
     result << "MemberAccess: ." << node.member << " " << nodeLocation(node) << "\n";
@@ -299,6 +304,12 @@ void ASTPrettyPrinter::visit(ProgramNode& node) {
     decreaseIndent();
     
     output << result.str();
+}
+
+void ASTPrettyPrinter::visit(GlobalVarDeclNode& node) {
+    if (node.varDecl) {
+        node.varDecl->accept(*this);
+    }
 }
 
 } // namespace minicompiler

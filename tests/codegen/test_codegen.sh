@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================
 # MiniLang Codegen Integration Tests
-# Sprint 5 + Sprint 6 + Float + Arrays
+# Sprint 5 + Sprint 6 + Sprint 7
 # ============================================
 
 RUNTIME="src/runtime/runtime.o"
@@ -29,7 +29,7 @@ run_test() {
     echo -n "Test $TOTAL: $test_name... "
     
     # Компиляция
-    $COMPILER codegen "$test_file" > /tmp/test.asm 2>/dev/null
+    $COMPILER codegen "$test_file" --optimize > /tmp/test.asm 2>/dev/null
     if [ $? -ne 0 ]; then
         echo -e "${RED}FAILED${NC} (compilation error)"
         FAILED=$((FAILED + 1))
@@ -46,6 +46,60 @@ run_test() {
     
     # Линковка
     ld -o /tmp/test_prog $RUNTIME /tmp/test.o 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}FAILED${NC} (link error)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    
+    # Выполнение
+    /tmp/test_prog > /tmp/test_out.txt 2>/dev/null
+    local result=$?
+    
+    if [ "$result" -eq "$expected" ]; then
+        echo -e "${GREEN}PASSED${NC} (exit code: $result)"
+        if [ -n "$description" ]; then
+            echo "        $description"
+        fi
+        PASSED=$((PASSED + 1))
+        return 0
+    else
+        echo -e "${RED}FAILED${NC} (expected: $expected, got: $result)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    
+    rm -f /tmp/test.asm /tmp/test.o /tmp/test_prog /tmp/test_out.txt
+}
+
+# Для тестов с внешними вызовами (printf, malloc) — линкуем с libc через gcc
+run_ext_test() {
+    local test_name="$1"
+    local test_file="$2"
+    local expected="$3"
+    local description="$4"
+    
+    TOTAL=$((TOTAL + 1))
+    echo -n "Test $TOTAL: $test_name... "
+    
+    # Компиляция
+    $COMPILER codegen "$test_file" --optimize > /tmp/test.asm 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}FAILED${NC} (compilation error)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    
+    # Ассемблирование
+    nasm -f elf64 /tmp/test.asm -o /tmp/test.o 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}FAILED${NC} (assembly error)"
+        FAILED=$((FAILED + 1))
+        return 1
+    fi
+    
+    # Линковка с libc (без runtime.o)
+    gcc -no-pie -o /tmp/test_prog /tmp/test.o -lm 2>/dev/null
     if [ $? -ne 0 ]; then
         echo -e "${RED}FAILED${NC} (link error)"
         FAILED=$((FAILED + 1))
@@ -129,6 +183,41 @@ echo ""
 run_test "Array basic" "tests/control_flow/valid/array_basic.mini" 60 "10+20+30=60"
 run_test "Array loop" "tests/control_flow/valid/array_loop.mini" 40 "0+40=40"
 run_test "Array conditional" "tests/control_flow/valid/array_conditional.mini" 10 "15-5=10"
+run_test "Array init list" "tests/control_flow/valid/array_init.mini" 60 "{10,20,30} = 60"
+run_test "Multi-dim array" "tests/control_flow/valid/multi_dim_array.mini" 6 "matrix[2][3] test"
+run_test "Array parameter" "tests/control_flow/valid/array_parameter.mini" 60 "sumArray function"
+run_test "Global array" "tests/control_flow/valid/global_array.mini" 60 "global array in .bss"
+
+echo ""
+echo "--- Sprint 7: Optimization Tests ---"
+echo ""
+
+run_test "Constant folding" "tests/optimization/valid/constant_folding.mini" 1 "folded constants"
+run_test "Dead code elimination" "tests/optimization/valid/dead_code.mini" 42 "dead code removed"
+run_test "DCE after return" "tests/optimization/valid/dead_code_after_return.mini" 42 "dead code after return"
+
+echo ""
+echo "--- Sprint 7: Demo Program ---"
+echo ""
+
+run_test "Bubble sort demo" "tests/demo/bubble_sort.mini" 16 "arrays + loops + sum"
+
+echo ""
+echo "--- Sprint 7: External Calls ---"
+echo ""
+
+run_ext_test "Printf test" "tests/optimization/valid/printf_test.mini" 42 "external printf call"
+run_ext_test "Malloc test" "tests/optimization/valid/malloc_test.mini" 42 "malloc + free"
+run_ext_test "Puts test" "tests/optimization/valid/puts_test.mini" 42 "external puts call"
+# run_ext_test "Scanf test" "tests/optimization/valid/scanf_test.mini" 42 "external scanf call"
+run_ext_test "Sqrt test" "tests/optimization/valid/sqrt_test.mini" 42 "math sqrt function"
+run_ext_test "Sin/Cos test" "tests/optimization/valid/math_test.mini" 42 "math sin/cos functions"
+run_ext_test "Strlen test" "tests/optimization/valid/strlen_test.mini" 42 "external strlen call"
+run_ext_test "Strcmp test" "tests/optimization/valid/strcmp_test.mini" 42 "external strcmp call"
+run_ext_test "Getchar test" "tests/optimization/valid/getchar_test.mini" 42 "external getchar call"
+run_ext_test "Memcpy test" "tests/optimization/valid/memcpy_test.mini" 42 "external memcpy call"
+run_ext_test "Memset test" "tests/optimization/valid/memset_test.mini" 42 "external memset call"
+run_ext_test "Strcpy test" "tests/optimization/valid/strcpy_test.mini" 42 "external strcpy call"
 
 echo ""
 echo "=========================================="

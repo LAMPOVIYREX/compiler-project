@@ -1,0 +1,5 @@
+fn main() -> int {
+    return 42;
+    int x = 5;  // dead code
+    x = x + 1;  // dead code
+}

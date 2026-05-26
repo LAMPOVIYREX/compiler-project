@@ -205,6 +205,14 @@ void MemberAccessExprNode::accept(ASTVisitor& visitor) {
     visitor.visit(*this);
 }
 
+void InitListExprNode::accept(ASTVisitor& visitor) {
+    visitor.visit(*this);
+}
+
+void GlobalVarDeclNode::accept(ASTVisitor& visitor) {
+    visitor.visit(*this);
+}
+
 std::string MemberAccessExprNode::toString() const {
     return "MemberAccess(." + member + ")";
 }

@@ -260,6 +260,21 @@ public:
     std::string toString() const override;
 };
 
+class InitListExprNode : public ExpressionNode {
+public:
+    std::vector<std::unique_ptr<ExpressionNode>> values;
+    
+    InitListExprNode(int line, int column)
+        : ExpressionNode(line, column) {}
+    
+    void addValue(std::unique_ptr<ExpressionNode> val) {
+        values.push_back(std::move(val));
+    }
+    
+    void accept(ASTVisitor& visitor) override;
+    std::string toString() const override { return "InitList"; }
+};
+
 class CallExprNode : public ExpressionNode {
 public:
     std::string callee;
@@ -436,6 +451,7 @@ public:
     std::string name;
     std::vector<std::pair<Type, std::string>> parameters;
     std::unique_ptr<BlockStmtNode> body;
+    bool isVariadic = false;
     
     FunctionDeclNode(int line, int column, const Type& retType, const std::string& n)
         : DeclarationNode(line, column), returnType(retType), name(n) {}
@@ -480,6 +496,18 @@ public:
     
     void accept(ASTVisitor& visitor) override;
     std::string toString() const override;
+};
+
+class GlobalVarDeclNode : public DeclarationNode {
+public:
+    std::unique_ptr<VarDeclStmtNode> varDecl;
+    
+    GlobalVarDeclNode(std::unique_ptr<VarDeclStmtNode> vd)
+        : DeclarationNode(vd->getLine(), vd->getColumn()), varDecl(std::move(vd)) {
+        //std::cerr << "GlobalVarDeclNode created: " << varDecl->name << std::endl;
+    }
+    void accept(ASTVisitor& visitor) override;
+    std::string toString() const override { return "GlobalVar(" + varDecl->name + ")"; }
 };
 
 } // namespace minicompiler

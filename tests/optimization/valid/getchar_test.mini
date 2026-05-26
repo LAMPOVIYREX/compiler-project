@@ -1,0 +1,7 @@
+extern getchar() -> int;
+extern printf(string format, ...) -> int;
+
+fn main() -> int {
+    printf("getchar exists and can be called\n");
+    return 42;
+}

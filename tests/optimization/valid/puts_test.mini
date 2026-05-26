@@ -1,0 +1,6 @@
+extern puts(string s) -> int;
+
+fn main() -> int {
+    puts("Hello from MiniLang!");
+    return 42;
+}

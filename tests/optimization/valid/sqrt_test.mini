@@ -1,0 +1,13 @@
+extern sqrtf(float x) -> float;
+extern printf(string format, ...) -> int;
+
+fn main() -> int {
+    float x = 16.0;
+    float result = sqrtf(x);
+    if (result > 3.9) {
+        if (result < 4.1) {
+            return 42;
+        }
+    }
+    return 0;
+}

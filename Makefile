@@ -1,5 +1,5 @@
 # ============================================
-# MiniCompiler Makefile - All Sprints (1-5)
+# MiniCompiler Makefile - All Sprints (1-7)
 # ============================================
 
 # Компилятор и флаги
@@ -30,16 +30,14 @@ PARSER_SRCS = src/parser/Parser.cpp \
 SEMANTIC_SRCS = src/semantic/SymbolTable.cpp src/semantic/SemanticAnalyzer.cpp
 
 # ============================================
-# Исходные файлы (Спринт 4 - IR и SSA)
+# Исходные файлы (Спринт 4/6/7 - IR, SSA, Optimizations)
 # ============================================
-# Добавить в IR_SRCS:
-IR_SRCS = src/ir/IR.cpp src/ir/IRGenerator.cpp src/ir/LoopOptimizer.cpp
+IR_SRCS = src/ir/IR.cpp src/ir/IRGenerator.cpp src/ir/LoopOptimizer.cpp src/ir/Optimizer.cpp
 SSA_SRCS = src/ir/SSA.cpp src/ir/SSABuilder.cpp
 
 # ============================================
-# Исходные файлы (Спринт 5 - Кодогенерация x86-64)
+# Исходные файлы (Спринт 5/6/7 - Кодогенерация x86-64)
 # ============================================
-# Исходные файлы кодогенерации (Sprint 5-6)
 CODEGEN_SRCS = src/codegen/X86Generator.cpp \
                src/codegen/LabelManager.cpp \
                src/codegen/StackFrame.cpp \
@@ -81,7 +79,6 @@ PARSER_TEST_TARGET = parser_test_runner
 PARSER_ERROR_TEST_TARGET = parser_error_test_runner
 SEMANTIC_TEST_TARGET = semantic_test_runner
 IR_TEST_TARGET = ir_test_runner
-CODEGEN_TEST_TARGET = codegen_test_runner
 
 # ============================================
 # Цели по умолчанию
@@ -227,12 +224,12 @@ test-ssa: $(TARGET)
 	@echo "=== SSA TESTS COMPLETE ==="
 
 # ============================================
-# Тесты кодогенерации (Спринт 5)
+# Тесты кодогенерации (Спринт 5-7)
 # ============================================
 
 test-codegen: $(TARGET) $(RUNTIME_OBJ)
 	@echo "========================================"
-	@echo "=== ТЕСТЫ КОДОГЕНЕРАЦИИ (Спринт 5) ==="
+	@echo "=== ТЕСТЫ КОДОГЕНЕРАЦИИ (Спринт 5-7) ==="
 	@echo "========================================"
 	@echo ""
 	@if [ -f "tests/codegen/test_codegen.sh" ]; then \
@@ -241,7 +238,6 @@ test-codegen: $(TARGET) $(RUNTIME_OBJ)
 	else \
 		echo "❌ test_codegen.sh not found"; \
 	fi
-
 
 test-all: build-tests test-lexer test-parser-all test-semantic test-ir test-ssa test-codegen
 	@echo ""
@@ -366,6 +362,10 @@ run-codegen: $(TARGET)
 	fi
 	./$(TARGET) codegen "$(FILE)" --verbose
 
+# ============================================
+# Сборка и запуск (обычные программы — с runtime)
+# ============================================
+
 build-and-run: $(TARGET) $(RUNTIME_OBJ)
 	@if [ -z "$(FILE)" ]; then \
 		echo "❌ Укажите файл: make build-and-run FILE=yourfile.mini"; \
@@ -373,7 +373,7 @@ build-and-run: $(TARGET) $(RUNTIME_OBJ)
 	fi
 	@name=$$(basename "$(FILE)" .mini); \
 	echo "Компиляция $(FILE)..."; \
-	./$(TARGET) codegen "$(FILE)" > "/tmp/$$name.asm" 2>&1; \
+	./$(TARGET) codegen "$(FILE)" --optimize > "/tmp/$$name.asm" 2>&1; \
 	if [ $$? -ne 0 ]; then \
 		echo "❌ Compilation failed"; \
 		cat "/tmp/$$name.asm"; \
@@ -398,7 +398,45 @@ build-and-run: $(TARGET) $(RUNTIME_OBJ)
 	echo "Запуск..."; \
 	"/tmp/$$name.out"; \
 	echo "Exit code: $$?"; \
-	rm -f "/tmp/$$name.asm" "/tmp/$$name.o" "/tmp/$$name.out"	
+	rm -f "/tmp/$$name.asm" "/tmp/$$name.o" "/tmp/$$name.out"
+
+# ============================================
+# Сборка и запуск с libc (для extern-программ)
+# ============================================
+
+build-and-run-extern: $(TARGET)
+	@if [ -z "$(FILE)" ]; then \
+		echo "❌ Укажите файл: make build-and-run-extern FILE=yourfile.mini"; \
+		exit 1; \
+	fi
+	@name=$$(basename "$(FILE)" .mini); \
+	echo "Компиляция $(FILE)..."; \
+	./$(TARGET) codegen "$(FILE)" --optimize > "/tmp/$$name.asm" 2>&1; \
+	if [ $$? -ne 0 ]; then \
+		echo "❌ Compilation failed"; \
+		cat "/tmp/$$name.asm"; \
+		rm -f "/tmp/$$name.asm"; \
+		exit 1; \
+	fi; \
+	echo "Ассемблирование..."; \
+	nasm -f elf64 "/tmp/$$name.asm" -o "/tmp/$$name.o" 2>&1; \
+	if [ $$? -ne 0 ]; then \
+		echo "❌ Assembly failed"; \
+		cat "/tmp/$$name.asm"; \
+		rm -f "/tmp/$$name.asm" "/tmp/$$name.o"; \
+		exit 1; \
+	fi; \
+	echo "Линковка с libc..."; \
+	gcc -no-pie -o "/tmp/$$name.out" "/tmp/$$name.o" -lm 2>&1; \
+	if [ $$? -ne 0 ]; then \
+		echo "❌ Link failed"; \
+		rm -f "/tmp/$$name.asm" "/tmp/$$name.o"; \
+		exit 1; \
+	fi; \
+	echo "Запуск..."; \
+	"/tmp/$$name.out"; \
+	echo "Exit code: $$?"; \
+	rm -f "/tmp/$$name.asm" "/tmp/$$name.o" "/tmp/$$name.out"
 # ============================================
 # Справка
 # ============================================
@@ -424,35 +462,23 @@ help:
 	@echo "  make test-semantic    - Тесты семантики (Спринт 3)"
 	@echo "  make test-ir          - Тесты IR (Спринт 4)"
 	@echo "  make test-ssa         - Тесты SSA формы"
-	@echo "  make test-codegen     - Тесты кодогенерации (Спринт 5)"
-	@echo "  make test-all         - ВСЕ ТЕСТЫ (Спринты 1-5)"
-	@echo ""
-	@echo "БЫСТРЫЕ ПРОВЕРКИ:"
-	@echo "  make check-lexer      - Проверить примеры лексером"
-	@echo "  make check-parser     - Проверить примеры парсером"
-	@echo "  make check-semantic   - Проверить примеры семантикой"
-	@echo "  make check-ir         - Проверить примеры IR"
-	@echo "  make check-ssa        - Проверить примеры SSA"
-	@echo "  make check-codegen    - Проверить примеры кодогенерацией"
-	@echo "  make check-all        - Все проверки"
+	@echo "  make test-codegen     - Тесты кодогенерации (Спринт 5-7)"
+	@echo "  make test-all         - ВСЕ ТЕСТЫ"
 	@echo ""
 	@echo "ЗАПУСК:"
-	@echo "  make run-lexer FILE=x.mini   - Запустить лексер"
-	@echo "  make run-parser FILE=x.mini  - Запустить парсер"
-	@echo "  make run-check FILE=x.mini   - Запустить семантику"
-	@echo "  make run-ir FILE=x.mini      - Запустить IR"
-	@echo "  make run-ssa FILE=x.mini     - Запустить SSA"
-	@echo "  make run-codegen FILE=x.mini - Запустить кодогенерацию"
-	@echo "  make build-and-run FILE=x.mini - Скомпилировать и запустить"
-	@echo ""
-	@echo "ВИЗУАЛИЗАЦИЯ AST:"
-	@echo "  make ast-file FILE=x.mini    - Создать PNG с AST"
+	@echo "  make run-lexer FILE=x.mini     - Запустить лексер"
+	@echo "  make run-parser FILE=x.mini    - Запустить парсер"
+	@echo "  make run-check FILE=x.mini     - Запустить семантику"
+	@echo "  make run-ir FILE=x.mini        - Запустить IR"
+	@echo "  make run-ssa FILE=x.mini       - Запустить SSA"
+	@echo "  make run-codegen FILE=x.mini   - Запустить кодогенерацию"
+	@echo "  make build-and-run FILE=x.mini - Скомпилировать и запустить (с runtime)"
+	@echo "  make build-and-run-extern FILE=x.mini - Скомпилировать и запустить (с libc)"
 	@echo ""
 	@echo "ПРИМЕРЫ:"
 	@echo "  make test-all"
-	@echo "  make run-codegen FILE=tests/codegen/valid/simple_add.mini"
 	@echo "  make build-and-run FILE=tests/codegen/valid/simple_add.mini"
-	@echo "  make check-all"
+	@echo "  make build-and-run-extern FILE=tests/optimization/valid/printf_test.mini"
 	@echo "============================================"
 
 .PHONY: all build-tests runtime clean clean-actual clean-all \
@@ -460,5 +486,6 @@ help:
         test-semantic test-ir test-ssa test-codegen test-all \
         check-lexer check-parser check-semantic check-ir check-ssa check-codegen check-all \
         check-graphviz ast-file \
-        run-lexer run-parser run-check run-ir run-ssa run-codegen build-and-run \
+        run-lexer run-parser run-check run-ir run-ssa run-codegen \
+        build-and-run build-and-run-extern \
         help

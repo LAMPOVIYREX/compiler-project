@@ -1,0 +1,8 @@
+extern printf(string format, ...) -> int;
+extern malloc(int size) -> int;
+
+fn main() -> int {
+    printf(42);
+    int x = malloc("wrong");
+    return 0;
+}

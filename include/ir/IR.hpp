@@ -227,6 +227,10 @@ public:
     
     std::string toString() const;
     void verify() const;
+    std::vector<IROperand> globals;  
+    void addGlobal(const IROperand& var) { globals.push_back(var); }
+    std::vector<std::pair<std::string, int>> globalArrays;
+
 };
 
 } // namespace minicompiler

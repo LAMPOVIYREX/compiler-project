@@ -1,0 +1,10 @@
+extern strlen(string s) -> int;
+extern printf(string format, ...) -> int;
+
+fn main() -> int {
+    int len = strlen("hello");
+    if (len == 5) {
+        return 42;
+    }
+    return 0;
+}

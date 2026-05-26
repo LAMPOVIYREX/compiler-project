@@ -12,7 +12,7 @@ enum class TokenType {
     // Ключевые слова
     KW_FN, KW_IF, KW_ELSE, KW_WHILE, KW_FOR, KW_RETURN,
     KW_INT, KW_FLOAT, KW_BOOL, KW_TRUE, KW_FALSE,
-    KW_STRUCT, KW_CONST, KW_PRINT, KW_STRING,  
+    KW_STRUCT, KW_CONST, KW_PRINT, KW_STRING, KW_EXTERN,
     
     // Идентификаторы и литералы
     IDENTIFIER,

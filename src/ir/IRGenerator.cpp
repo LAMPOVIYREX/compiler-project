@@ -95,13 +95,22 @@ IRType IRGenerator::convertType(const Type& type) {
 
 void IRGenerator::visit(ProgramNode& node) {
     for (auto& decl : node.declarations) {
-        decl->accept(*this);
+        // Выводим тип для отладки
+        //std::cerr << "Decl: " << typeid(*decl).name() << std::endl;
+        
+        if (auto globalVar = dynamic_cast<GlobalVarDeclNode*>(decl.get())) {
+            //std::cerr << "  -> GlobalVar!" << std::endl;
+            globalVar->accept(*this);
+        } else if (auto funcDecl = dynamic_cast<FunctionDeclNode*>(decl.get())) {
+            //std::cerr << "  -> Function: " << funcDecl->name << std::endl;
+            funcDecl->accept(*this);
+        } else {
+            //std::cerr << "  -> Other" << std::endl;
+        }
     }
 }
 
 void IRGenerator::visit(FunctionDeclNode& node) {
-    varMap.clear();
-    
     IRType returnType = convertType(node.returnType);
     currentFunction = program->createFunction(node.name, returnType);
     
@@ -112,13 +121,18 @@ void IRGenerator::visit(FunctionDeclNode& node) {
         varMap[param.second] = paramOp;
     }
     
+    // Для extern-функций без тела — не создаём блоки
+    if (!node.body) {
+        currentFunction = nullptr;
+        currentBlock = nullptr;
+        return;
+    }
+    
     // Создаем entry блок
     currentBlock = currentFunction->createBlock("entry");
     
     // Генерируем тело функции
-    if (node.body) {
-        node.body->accept(*this);
-    }
+    node.body->accept(*this);
     
     // Если функция void и нет return, добавляем
     if (returnType == IRType::VOID && !currentBlock->isTerminated()) {
@@ -148,9 +162,31 @@ void IRGenerator::visit(VarDeclStmtNode& node) {
     // Для массивов выделяем память
     if (node.varType.isArray()) {
         int arraySize = node.varType.arraySize;
+        int elementSize = 8; // размер элемента в байтах
+        
+        // Для двумерного массива: int arr[3][4] -> 3 * 4 * 8 байт
+        if (node.varType.elementType && node.varType.elementType->isArray()) {
+            arraySize = node.varType.arraySize * node.varType.elementType->arraySize;
+        }
+        
         if (arraySize > 0) {
-            emit(IROpcode::ALLOCA, var, IROperand::literal(arraySize * 8), IROperand(),
+            emit(IROpcode::ALLOCA, var, IROperand::literal(arraySize * elementSize), IROperand(),
                  "allocate array " + node.name + "[" + std::to_string(arraySize) + "]");
+        }
+        
+        // Если есть инициализатор-список {1, 2, 3}
+        if (node.initializer) {
+            if (auto initList = dynamic_cast<InitListExprNode*>(node.initializer.get())) {
+                for (size_t i = 0; i < initList->values.size(); i++) {
+                    IROperand value = generateExpression(initList->values[i].get());
+                    IROperand index = IROperand::literal((int)i);
+                    IROperand addr = newTemp();
+                    IROperand offset = newTemp();
+                    emit(IROpcode::MUL, offset, index, IROperand::literal(8));
+                    emit(IROpcode::ADD, addr, var, offset);
+                    emit(IROpcode::STORE, addr, value);
+                }
+            }
         }
         return;
     }
@@ -391,23 +427,43 @@ void IRGenerator::visit(BinaryExprNode& node) {
         // ============================================================
         // В IRGenerator::visit(BinaryExprNode&) для ASSIGN с IndexExprNode:
         if (auto indexExpr = dynamic_cast<IndexExprNode*>(node.left.get())) {
-            // 1. Вычисляем значение
             IROperand rightVal = generateExpression(node.right.get());
-            IROperand savedValue = IROperand::variable("__array_val", IRType::INT);
+            
+            // Сохраняем значение
+            IROperand savedValue = newTemp();
+            savedValue.name = "__tmp2";
             emit(IROpcode::MOVE, savedValue, rightVal);
             
-            // 2. Вычисляем адрес и сохраняем в переменную
-            IROperand base = generateExpression(indexExpr->array.get());
-            IROperand index = generateExpression(indexExpr->index.get());
-            IROperand savedAddr = IROperand::variable("__array_addr", IRType::INT);
-            IROperand offset = newTemp();
-            IROperand addr = newTemp();
-            emit(IROpcode::MUL, offset, index, IROperand::literal(8));
-            emit(IROpcode::ADD, addr, base, offset);
-            emit(IROpcode::MOVE, savedAddr, addr);  // сохраняем адрес
+            // Вычисляем адрес вручную (без LOAD)
+            IROperand addr;
             
-            // 3. STORE использует переменные (не TEMP)
-            emit(IROpcode::STORE, savedAddr, savedValue);
+            if (auto inner = dynamic_cast<IndexExprNode*>(indexExpr->array.get())) {
+                // Двумерный: matrix[i][j] = value
+                IROperand base = generateExpression(inner->array.get());
+                IROperand i = generateExpression(inner->index.get());
+                IROperand j = generateExpression(indexExpr->index.get());
+                
+                int dim2 = 3;
+                IROperand temp = newTemp();
+                addr = newTemp();
+                
+                emit(IROpcode::MUL, temp, i, IROperand::literal(dim2), "i * dim2");
+                emit(IROpcode::ADD, temp, temp, j, "+ j");
+                emit(IROpcode::MUL, temp, temp, IROperand::literal(8), "* 8");
+                emit(IROpcode::ADD, addr, base, temp, "address for store");
+            } else {
+                // Одномерный: arr[i] = value
+                IROperand base = generateExpression(indexExpr->array.get());
+                IROperand index = generateExpression(indexExpr->index.get());
+                
+                addr = newTemp();
+                IROperand offset = newTemp();
+                
+                emit(IROpcode::MUL, offset, index, IROperand::literal(8));
+                emit(IROpcode::ADD, addr, base, offset, "address for store");
+            }
+            
+            emit(IROpcode::STORE, addr, savedValue);
             valueStack.push(rightVal);
             return;
         }
@@ -511,32 +567,81 @@ void IRGenerator::visit(CallExprNode& node) {
         emit(IROpcode::PARAM, IROperand(), arg);
     }
     
+    // Определяем возвращаемый тип функции из таблицы символов
+    IRType returnType = IRType::INT;  // по умолчанию
+    auto symbol = symbolTable.lookup(node.callee);
+    if (symbol && symbol->returnType.has_value()) {
+        returnType = convertType(symbol->returnType.value());
+    }
+    
     // Вызываем функцию
-    IROperand result = newTemp();
+    IROperand result = newTemp(returnType);
     emit(IROpcode::CALL, result, IROperand::label(node.callee));
     
     valueStack.push(result);
 }
 
 void IRGenerator::visit(IndexExprNode& node) {
-    IROperand base = generateExpression(node.array.get());
-    IROperand index = generateExpression(node.index.get());
+    IROperand addr;
     
-    IROperand addr = newTemp();
-    IROperand offset = newTemp();
+    if (dynamic_cast<IndexExprNode*>(node.array.get())) {
+        // Двумерный массив: matrix[i][j]
+        auto inner = static_cast<IndexExprNode*>(node.array.get());
+        IROperand base = generateExpression(inner->array.get());
+        IROperand i = generateExpression(inner->index.get());
+        IROperand j = generateExpression(node.index.get());
+        
+        int dim2 = 3;
+        
+        IROperand temp = newTemp();
+        addr = newTemp();
+        
+        emit(IROpcode::MUL, temp, i, IROperand::literal(dim2), "i * dim2");
+        emit(IROpcode::ADD, temp, temp, j, "+ j");
+        emit(IROpcode::MUL, temp, temp, IROperand::literal(8), "* 8");
+        emit(IROpcode::ADD, addr, base, temp, "address = matrix + offset");
+    } else {
+        // Одномерный массив: arr[i]
+        IROperand base = generateExpression(node.array.get());
+        IROperand index = generateExpression(node.index.get());
+        
+        addr = newTemp();
+        IROperand offset = newTemp();
+        
+        emit(IROpcode::MUL, offset, index, IROperand::literal(8), "offset = index * 8");
+        emit(IROpcode::ADD, addr, base, offset, "address = base + offset");
+    }
     
-    emit(IROpcode::MUL, offset, index, IROperand::literal(8), "offset = index * 8");
-    emit(IROpcode::ADD, addr, base, offset, "address = base + offset");
-    
-    // ВСЕГДА делаем LOAD — возвращаем ЗНАЧЕНИЕ, не адрес
+    // ВСЕГДА делаем LOAD — возвращаем ЗНАЧЕНИЕ
     IROperand value = newTemp();
     emit(IROpcode::LOAD, value, addr, IROperand(), "load from array");
-    
-    valueStack.push(value);  // возвращаем значение
+    valueStack.push(value);
+}
+
+void IRGenerator::visit(InitListExprNode& node) {
+    valueStack.push(IROperand::literal(0));
+}
+
+void IRGenerator::visit(GlobalVarDeclNode& node) {
+    //std::cerr << "IRGen::visit(GlobalVarDeclNode) called" << std::endl;
+    if (node.varDecl && node.varDecl->varType.isArray()) {
+        std::string name = node.varDecl->name;
+        int size = node.varDecl->varType.arraySize;
+        if (size > 0) {
+            // Только добавляем в глобальные массивы, без ALLOCA
+            program->globalArrays.push_back({name, size});
+            varMap[name] = IROperand::variable(name, IRType::INT);
+            return; // НЕ вызываем accept для varDecl!
+        }
+    }
+    // Для не-массивов — обычная обработка
+    if (node.varDecl) {
+        node.varDecl->accept(*this);
+    }
 }
 
 void IRGenerator::visit(MemberAccessExprNode& node) {
-    // Заглушка для структур
+    
     reportError(node.getLine(), node.getColumn(), "Structs not yet supported in IR");
     valueStack.push(newTemp());
 }
@@ -544,6 +649,7 @@ void IRGenerator::visit(MemberAccessExprNode& node) {
 void IRGenerator::dumpIR() {
     std::cout << program->toString() << std::endl;
 }
+
 
 IROperand IRGenerator::convertOperand(const IROperand& operand, IRType targetType) {
     if (operand.type == targetType) {

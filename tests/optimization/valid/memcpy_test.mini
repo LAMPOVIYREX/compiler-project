@@ -1,0 +1,16 @@
+extern malloc(int size) -> int;
+extern memcpy(int dest, int src, int n) -> int;
+extern printf(string format, ...) -> int;
+
+fn main() -> int {
+    int src = malloc(100);
+    int dest = malloc(100);
+    if (src != 0) {
+        if (dest != 0) {
+            memcpy(dest, src, 100);
+            printf("memcpy works!\n");
+            return 42;
+        }
+    }
+    return 1;
+}

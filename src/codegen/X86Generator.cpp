@@ -17,6 +17,9 @@ std::string X86Generator::generate(IRProgram& irProgram) {
     output.str("");
     output.clear();
     
+    // 1. Сначала section .text (NASM требует директиву в начале)
+    output << "section .text\n\n";
+    
     emit("; ============================================");
     emit("; MiniLang Compiler - x86-64 Assembly Output");
     emit("; Target: Linux x86-64, System V AMD64 ABI");
@@ -24,66 +27,120 @@ std::string X86Generator::generate(IRProgram& irProgram) {
     emit("; ============================================");
     emitBlank();
     
-    // Extern declarations
-    externFunctions.clear();
+    // 2. Собираем строковые литералы
+    rodataStrings.clear();
     for (auto& func : irProgram.functions) {
         for (auto& block : func->blocks) {
             for (auto& instr : block->instructions) {
-                if (instr->opcode == IROpcode::CALL) {
-                    std::string callee = instr->src1.name;
-                    bool found = false;
-                    for (auto& f : irProgram.functions) {
-                        if (f->name == callee) { found = true; break; }
+                if (instr->opcode == IROpcode::PARAM && 
+                    instr->src1.kind == IROperand::Kind::LITERAL &&
+                    instr->src1.type == IRType::STRING) {
+                    std::string str = instr->src1.stringValue;
+                    if (str.size() >= 2 && str.front() == '"' && str.back() == '"') {
+                        str = str.substr(1, str.size() - 2);
                     }
-                    if (!found) externFunctions.insert(callee);
+                    bool found = false;
+                    for (auto& s : rodataStrings) {
+                        if (s == str) { found = true; break; }
+                    }
+                    if (!found) rodataStrings.push_back(str);
                 }
             }
         }
     }
     
-    for (auto& ext : externFunctions) {
-        emit("extern " + ext);
+    // ============ ЗАПОЛНЯЕМ ИМЕНА ГЛОБАЛЬНЫХ МАССИВОВ ДО ГЕНЕРАЦИИ ФУНКЦИЙ ============
+    globalArrayNames.clear();
+    for (auto& [name, size] : irProgram.globalArrays) {
+        globalArrayNames.insert(name);
     }
+ 
+
+    // 3. Определяем внешние функции
+    externFunctions.clear();
+    std::unordered_set<std::string> definedFuncs;
+    for (auto& func : irProgram.functions) {
+        // Только функции с телом считаются определёнными
+        if (!func->blocks.empty()) {
+            definedFuncs.insert(func->name);
+        }
+    }
+    for (auto& func : irProgram.functions) {
+        for (auto& block : func->blocks) {
+            for (auto& instr : block->instructions) {
+                if (instr->opcode == IROpcode::CALL) {
+                    std::string callee = instr->src1.name;
+                    if (definedFuncs.find(callee) == definedFuncs.end()) {
+                        externFunctions[callee] = externFunctions.size();
+                    }
+                }
+            }
+        }
+    }
+    
+    for (auto& [name, idx] : externFunctions) {
+        std::cerr << name << " ";
+    }
+    std::cerr << std::endl;
     if (!externFunctions.empty()) emitBlank();
     
-    emit("section .text");
-    emitBlank();
-    
+    // 4. Генерируем функции
     for (auto& func : irProgram.functions) {
         currentFunction = func.get();
-        stackSlots.clear();
-        varToReg.clear();
-        paramCounter = 0;
         
+        // extern функции без тела
+        bool hasBody = false;
+        for (auto& block : func->blocks) {
+            if (!block->instructions.empty()) { hasBody = true; break; }
+        }
+        if (!hasBody) {
+            emit("extern " + func->name);
+            emitBlank();
+            continue;
+        }
+        
+        stackSlots.clear();
+        paramCounter = 0;
         computeStackLayout(*func);
         generateFunctionHeader(*func);
-        
         for (auto& block : func->blocks) {
             generateBasicBlock(*block);
         }
-        
         generateFunctionFooter(*func);
         emitBlank();
     }
     
-    // Секции данных
-    if (!stringLiterals.empty()) {
-        emitBlank();
-        emit("section .rodata");
-        for (size_t i = 0; i < stringLiterals.size(); i++) {
-            emitLabel(".L.str" + std::to_string(i) + ":");
-            emit("db " + stringLiterals[i] + ", 0");
+    // 5. Секция .rodata (после .text)
+    if (!rodataStrings.empty()) {
+        output << "section .rodata\n";
+        for (size_t i = 0; i < rodataStrings.size(); i++) {
+            emitLabel("L.str" + std::to_string(i) + ":");
+            std::string escaped;
+            for (size_t j = 0; j < rodataStrings[i].size(); j++) {
+                char c = rodataStrings[i][j];
+                if (c == '\\' && j + 1 < rodataStrings[i].size()) {
+                    char next = rodataStrings[i][j + 1];
+                    if (next == 'n') { escaped += "\\n"; j++; continue; }
+                    if (next == 't') { escaped += "\\t"; j++; continue; }
+                    if (next == 'r') { escaped += "\\r"; j++; continue; }
+                    if (next == '"') { escaped += "\\\""; j++; continue; }
+                    if (next == '\\') { escaped += "\\\\"; j++; continue; }
+                }
+                if (c == '\n') { escaped += "\\n"; continue; }
+                if (c == '\t') { escaped += "\\t"; continue; }
+                if (c == '\r') { escaped += "\\r"; continue; }
+                if (c == '\"') { escaped += "\\\""; continue; }
+                escaped += c;
+            }
+            emit("db `" + escaped + "`, 0");
         }
     }
     
-    if (!globalVars.empty()) {
-        emitBlank();
-        emit("section .data");
-        for (auto& gv : globalVars) {
-            if (gv.isInitialized) {
-                emitLabel(gv.name + ":");
-                emit("dq " + gv.value);
-            }
+    // 6. Секция .bss (после .rodata)
+    if (!irProgram.globalArrays.empty()) {
+        output << "\nsection .bss\n";
+        for (auto& [name, size] : irProgram.globalArrays) {
+            output << name << ": resq " << size << "\n";
         }
     }
     
@@ -112,7 +169,10 @@ void X86Generator::computeStackLayout(IRFunction& func) {
     offset = alignTo(offset, 8);
     offset += 8;
     stackSlots["__tmp"] = {"__tmp", -(offset + redZoneOffset), 8, IRType::INT};
-
+    
+    offset = alignTo(offset, 8);
+    offset += 8;
+    stackSlots["__tmp2"] = {"__tmp2", -(offset + redZoneOffset), 8, IRType::INT};
     // Параметры
     for (size_t i = 0; i < func.parameters.size(); i++) {
         std::string paramName = func.parameters[i].name;
@@ -205,6 +265,30 @@ void X86Generator::generateFunctionHeader(IRFunction& func) {
     emitPrologue(func);
 }
 
+void X86Generator::generateExternCall(IRInstruction& instr) {
+    std::string funcName = instr.src1.name;
+        
+    // Для variadic функций (printf, scanf) нужно установить AL = 0
+    if (funcName == "printf" || funcName == "scanf" || funcName == "fprintf" ||
+        funcName == "sprintf" || funcName == "snprintf") {
+        emit("xor eax, eax", "; variadic: AL = 0 (no SSE registers used)");
+    }
+    
+    // Вызываем функцию
+    emit("call " + funcName);
+    
+    // Сохраняем результат в зависимости от возвращаемого типа
+    // Определяем возвращаемый тип по IR-инструкции
+    if (instr.dest.type == IRType::FLOAT) {
+        // Float-функции возвращают результат в xmm0
+        saveFloatResult(instr.dest);
+    } else {
+        // Int/pointer функции возвращают результат в rax
+        emit("mov " + getStackSlot("__tmp") + ", rax", "; save call result");
+    }
+    paramCounter = 0;
+}
+
 void X86Generator::emitPrologue(IRFunction& func) {
     emit("push rbp", "; save base pointer");
     emit("mov rbp, rsp", "; set new base pointer");
@@ -283,7 +367,18 @@ void X86Generator::generateInstruction(IRInstruction& instr) {
             emit("cmp " + getOperandString(instr.src1) + ", 0");
             emit("je " + currentFunction->name + "_" + instr.src2.name); break;
         case IROpcode::MOVE: genMove(instr.dest, instr.src1); break;
-        case IROpcode::CALL: genCall(instr.dest, instr.src1); break;
+        
+        // ============================================================
+        // CALL — проверяем внешняя функция или внутренняя
+        // ============================================================
+        case IROpcode::CALL:
+            if (externFunctions.find(instr.src1.name) != externFunctions.end()) {
+                generateExternCall(instr);
+            } else {
+                genCall(instr.dest, instr.src1);
+            }
+            break;
+            
         case IROpcode::RETURN: genReturn(instr.src1); break;
         case IROpcode::PARAM: genParam(instr.src1); break;
         case IROpcode::COPY:
@@ -292,7 +387,12 @@ void X86Generator::generateInstruction(IRInstruction& instr) {
                 if (opStr.size() > 5 && opStr.substr(0, 5) == "qword") {
                     opStr = "dword" + opStr.substr(5);
                 }
-                emit("cvtsi2ss xmm0, " + opStr, "; int to float");
+                if (instr.src1.kind == IROperand::Kind::LITERAL) {
+                    emit("mov eax, " + opStr, "; constant to reg");
+                    emit("cvtsi2ss xmm0, eax", "; int to float");
+                } else {
+                    emit("cvtsi2ss xmm0, " + opStr, "; int to float");
+                }
                 saveFloatResult(instr.dest);
             } else if (instr.src1.type == IRType::FLOAT && instr.dest.type == IRType::INT) {
                 emit("cvttss2si rax, " + getOperandString(instr.src1), "; float to int");
@@ -307,13 +407,25 @@ void X86Generator::generateInstruction(IRInstruction& instr) {
             emit("mov " + getStackSlot(instr.dest.name) + ", rsp", "; save array pointer");
             break;
         case IROpcode::LOAD:
-            emit("mov rax, " + getOperandString(instr.src1), "; load address");
+            emitAddressLoad(instr.src1);                    
             emit("mov rax, [rax]", "; load value from memory");
             saveResultToDest(instr.dest);
             break;
         case IROpcode::STORE:
-            emit("mov rax, " + getOperandString(instr.src1), "; value to store");
-            emit("mov rbx, " + getOperandString(instr.dest), "; destination address");
+            // Значение сохраняем через __tmp2 (чтобы не перезаписать адрес)
+            if (instr.src1.kind == IROperand::Kind::TEMP) {
+                emit("mov rax, " + getStackSlot("__tmp2"), "; load value from tmp2");
+            } else {
+                emit("mov rax, " + getOperandString(instr.src1), "; value to store");
+            }
+            // Адрес загружаем из __tmp
+            if (instr.dest.kind == IROperand::Kind::TEMP) {
+                emit("mov rbx, " + getStackSlot("__tmp"), "; load address from tmp");
+            } else if (instr.dest.kind == IROperand::Kind::VARIABLE && globalArrayNames.count(instr.dest.name)) {
+                emit("lea rbx, [" + getOperandString(instr.dest) + "]", "; global array address");
+            } else {
+                emit("mov rbx, " + getOperandString(instr.dest), "; destination address");
+            }
             emit("mov [rbx], rax", "; store to memory");
             break;
         default: break;
@@ -331,7 +443,12 @@ void X86Generator::emitBinaryOp(IROpcode op, const IROperand& dest,
             if (opStr.size() > 5 && opStr.substr(0, 5) == "qword") {
                 opStr = "dword" + opStr.substr(5);
             }
-            emit("cvtsi2ss xmm0, " + opStr);
+            if (src1.kind == IROperand::Kind::LITERAL) {
+                emit("mov eax, " + opStr);
+                emit("cvtsi2ss xmm0, eax");
+            } else {
+                emit("cvtsi2ss xmm0, " + opStr);
+            }
         } else {
             std::string opStr = getOperandString(src1);
             if (opStr[0] == 'q') {
@@ -349,7 +466,12 @@ void X86Generator::emitBinaryOp(IROpcode op, const IROperand& dest,
             if (opStr.size() > 5 && opStr.substr(0, 5) == "qword") {
                 opStr = "dword" + opStr.substr(5);
             }
-            emit("cvtsi2ss xmm1, " + opStr);
+            if (src2.kind == IROperand::Kind::LITERAL) {
+                emit("mov eax, " + opStr);
+                emit("cvtsi2ss xmm1, eax");
+            } else {
+                emit("cvtsi2ss xmm1, " + opStr);
+            }
         } else {
             std::string opStr = getOperandString(src2);
             if (opStr[0] == 'q') {
@@ -397,7 +519,12 @@ void X86Generator::emitDivMod(IROpcode op, const IROperand& dest,
             if (opStr.size() > 5 && opStr.substr(0, 5) == "qword") {
                 opStr = "dword" + opStr.substr(5);
             }
-            emit("cvtsi2ss xmm0, " + opStr);
+            if (src1.kind == IROperand::Kind::LITERAL) {
+                emit("mov eax, " + opStr);
+                emit("cvtsi2ss xmm0, eax");
+            } else {
+                emit("cvtsi2ss xmm0, " + opStr);
+            }
         } else {
             std::string opStr = getOperandString(src1);
             if (opStr[0] == 'q') {
@@ -415,7 +542,12 @@ void X86Generator::emitDivMod(IROpcode op, const IROperand& dest,
             if (opStr.size() > 5 && opStr.substr(0, 5) == "qword") {
                 opStr = "dword" + opStr.substr(5);
             }
-            emit("cvtsi2ss xmm1, " + opStr);
+            if (src2.kind == IROperand::Kind::LITERAL) {
+                emit("mov eax, " + opStr);
+                emit("cvtsi2ss xmm1, eax");
+            } else {
+                emit("cvtsi2ss xmm1, " + opStr);
+            }
         } else {
             std::string opStr = getOperandString(src2);
             if (opStr[0] == 'q') {
@@ -461,7 +593,12 @@ void X86Generator::genComparison(IROpcode op, const IROperand& dest,
             if (opStr.size() > 5 && opStr.substr(0, 5) == "qword") {
                 opStr = "dword" + opStr.substr(5);
             }
-            emit("cvtsi2ss xmm0, " + opStr, "; int to float");
+            if (src1.kind == IROperand::Kind::LITERAL) {
+                emit("mov eax, " + opStr, "; constant to reg");
+                emit("cvtsi2ss xmm0, eax", "; int to float");
+            } else {
+                emit("cvtsi2ss xmm0, " + opStr, "; int to float");
+            }
         } else {
             std::string opStr = getOperandString(src1);
             if (opStr[0] == 'q') {
@@ -479,7 +616,12 @@ void X86Generator::genComparison(IROpcode op, const IROperand& dest,
             if (opStr.size() > 5 && opStr.substr(0, 5) == "qword") {
                 opStr = "dword" + opStr.substr(5);
             }
-            emit("cvtsi2ss xmm1, " + opStr, "; int to float");
+            if (src2.kind == IROperand::Kind::LITERAL) {
+                emit("mov eax, " + opStr, "; constant to reg");
+                emit("cvtsi2ss xmm1, eax", "; int to float");
+            } else {
+                emit("cvtsi2ss xmm1, " + opStr, "; int to float");
+            }
         } else {
             std::string opStr = getOperandString(src2);
             if (opStr[0] == 'q') {
@@ -524,8 +666,8 @@ void X86Generator::genComparison(IROpcode op, const IROperand& dest,
 void X86Generator::genMove(const IROperand& dest, const IROperand& src) {
     if (dest.kind == IROperand::Kind::VARIABLE) {
         std::string destStr = getStackSlot(dest.name);
+        std::string srcStr = getOperandString(src);
         
-        // Float dest
         if (destStr[0] == 'd') {
             if (src.kind == IROperand::Kind::LITERAL && src.type == IRType::FLOAT) {
                 emit("mov eax, __float32__(" + std::to_string(src.floatValue) + ")", "; float constant");
@@ -537,25 +679,29 @@ void X86Generator::genMove(const IROperand& dest, const IROperand& src) {
                 }
                 emit("cvtsi2ss xmm0, " + opStr, "; int to float");
             } else {
-                std::string srcStr = getOperandString(src);
-                if (srcStr[0] == 'q') {
-                    emit("movq xmm0, " + srcStr, "; load temp as float");
+                std::string srcStr2 = getOperandString(src);
+                if (srcStr2[0] == 'q') {
+                    emit("movq xmm0, " + srcStr2, "; load temp as float");
                 } else {
-                    emit("movss xmm0, " + srcStr, "; load float");
+                    emit("movss xmm0, " + srcStr2, "; load float");
                 }
             }
             emit("movss " + destStr + ", xmm0", "; save float");
             return;
         }
         
-        // Integer dest
-        std::string srcStr = getOperandString(src);
         if (srcStr[0] == 'q' && destStr[0] == 'q') {
             emit("mov rax, " + srcStr);
             emit("mov " + destStr + ", rax");
         } else if (destStr != srcStr) {
             emit("mov " + destStr + ", " + srcStr);
         }
+    }
+    // Для TEMP с именем (например __tmp2 = MOVE value)
+    else if (dest.kind == IROperand::Kind::TEMP && !dest.name.empty()) {
+        std::string srcStr = getOperandString(src);
+        emit("mov rax, " + srcStr);
+        emit("mov " + getStackSlot(dest.name) + ", rax", "; save to " + dest.name);
     }
 }
 
@@ -582,19 +728,64 @@ void X86Generator::genCall(const IROperand& dest, const IROperand& func) {
 
 void X86Generator::genParam(const IROperand& value) {
     std::string valStr = getOperandString(value);
-    if (paramCounter < MAX_PARAM_REGS)
-        emit("mov " + std::string(PARAM_REGS[paramCounter]) + ", " + valStr,
-             "; param " + std::to_string(paramCounter + 1));
-    else
+    
+    if (value.kind == IROperand::Kind::LITERAL && value.type == IRType::STRING) {
+        std::string str = value.stringValue;
+        if (str.size() >= 2 && str.front() == '"' && str.back() == '"') {
+            str = str.substr(1, str.size() - 2);
+        }
+        int strIdx = -1;
+        for (size_t i = 0; i < rodataStrings.size(); i++) {
+            if (rodataStrings[i] == str) {
+                strIdx = i;
+                break;
+            }
+        }
+        
+        if (strIdx >= 0) {
+            valStr = "L.str" + std::to_string(strIdx);
+            if (paramCounter < MAX_PARAM_REGS) {
+                emit("lea " + std::string(PARAM_REGS[paramCounter]) + ", [rel " + valStr + "]",
+                     "; param " + std::to_string(paramCounter + 1) + ": string");
+            } else {
+                emit("lea rax, [rel " + valStr + "]", "; load string address");
+                emit("push rax", "; param " + std::to_string(paramCounter + 1) + " on stack");
+            }
+            paramCounter++;
+            return;
+        }
+    }
+    
+    // Обычные параметры
+    if (paramCounter < MAX_PARAM_REGS) {
+        if (value.type == IRType::FLOAT) {
+            // Для float используем 32-битный регистр (edi, esi, ...)
+            std::string reg32 = PARAM_REGS[paramCounter];
+            // Заменяем 64-битный регистр на 32-битный: rdi -> edi, rsi -> esi и т.д.
+            if (reg32 == "rdi") reg32 = "edi";
+            else if (reg32 == "rsi") reg32 = "esi";
+            else if (reg32 == "rdx") reg32 = "edx";
+            else if (reg32 == "rcx") reg32 = "ecx";
+            else if (reg32 == "r8") reg32 = "r8d";
+            else if (reg32 == "r9") reg32 = "r9d";
+            emit("mov " + reg32 + ", " + valStr,
+                 "; param " + std::to_string(paramCounter + 1) + ": float");
+        } else {
+            emit("mov " + std::string(PARAM_REGS[paramCounter]) + ", " + valStr,
+                 "; param " + std::to_string(paramCounter + 1));
+        }
+    } else {
         emit("push " + valStr, "; param " + std::to_string(paramCounter + 1) + " on stack");
+    }
     paramCounter++;
 }
 
 void X86Generator::saveResultToDest(const IROperand& dest) {
-    if (dest.kind == IROperand::Kind::VARIABLE)
+    if (dest.kind == IROperand::Kind::VARIABLE) {
         emit("mov " + getStackSlot(dest.name) + ", rax", "; save to " + dest.name);
-    else if (dest.kind == IROperand::Kind::TEMP)
+    } else if (dest.kind == IROperand::Kind::TEMP) {
         emit("mov " + getStackSlot("__tmp") + ", rax", "; save temp");
+    }
 }
 
 void X86Generator::saveFloatResult(const IROperand& dest) {
@@ -618,6 +809,13 @@ std::string X86Generator::getOperandString(const IROperand& op) {
             }
             return std::to_string(op.intValue);
         case IROperand::Kind::VARIABLE:
+            // Для глобального массива возвращаем просто имя метки (адрес)
+            if (globalArrayNames.count(op.name)) {
+                return op.name;
+            }
+            if (stackSlots.find(op.name) == stackSlots.end()) {
+                return "qword [" + op.name + "]";
+            }
             return getStackSlot(op.name);
         case IROperand::Kind::TEMP:
             return getStackSlot("__tmp");
@@ -625,6 +823,15 @@ std::string X86Generator::getOperandString(const IROperand& op) {
             return op.name;
     }
     return "0";
+}
+
+void X86Generator::emitAddressLoad(const IROperand& addr) {
+    std::string opStr = getOperandString(addr);
+    if (addr.kind == IROperand::Kind::VARIABLE && globalArrayNames.count(addr.name)) {
+        emit("lea rax, [" + opStr + "]");
+    } else {
+        emit("mov rax, " + opStr);
+    }
 }
 
 std::string X86Generator::getStackSlot(const std::string& varName) {
@@ -643,7 +850,7 @@ std::string X86Generator::getRegister(int paramIndex) {
 }
 
 std::string X86Generator::newLabel() { return ".LBB" + std::to_string(labelCounter++); }
-std::string X86Generator::newStringLabel() { return ".L.str" + std::to_string(stringLabelCounter++); }
+std::string X86Generator::newStringLabel() { return "L.str" + std::to_string(stringLabelCounter++); }
 
 void X86Generator::emit(const std::string& line, const std::string& comment) {
     output << "    " << line;

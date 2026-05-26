@@ -1,0 +1,13 @@
+extern strcpy(int dest, string src) -> int;
+extern malloc(int size) -> int;
+extern printf(string format, ...) -> int;
+
+fn main() -> int {
+    int buf = malloc(100);
+    if (buf != 0) {
+        strcpy(buf, "Hello");
+        printf("strcpy works!\n");
+        return 42;
+    }
+    return 1;
+}

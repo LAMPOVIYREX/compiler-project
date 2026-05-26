@@ -1,0 +1,19 @@
+extern sinf(float x) -> float;
+extern cosf(float x) -> float;
+extern printf(string format, ...) -> int;
+
+fn main() -> int {
+    float angle = 0.0;
+    float s = sinf(angle);
+    float c = cosf(angle);
+    if (s > -0.1) {
+        if (s < 0.1) {
+            if (c > 0.9) {
+                if (c < 1.1) {
+                    return 42;
+                }
+            }
+        }
+    }
+    return 0;
+}

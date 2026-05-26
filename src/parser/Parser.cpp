@@ -62,11 +62,11 @@ std::unique_ptr<ProgramNode> Parser::parse() {
         
         size_t oldPos = current;
         auto decl = parseDeclaration();
-        
         if (decl) {
+            //std::cerr << "Adding decl: " << typeid(*decl).name() << std::endl;
             program->addDeclaration(std::move(decl));
         } else {
-            // Если не удалось распарсить, пропускаем один токен
+            //std::cerr << "parseDeclaration returned null" << std::endl;
             if (oldPos == current && !isAtEnd()) {
                 advance();
             }
@@ -77,20 +77,41 @@ std::unique_ptr<ProgramNode> Parser::parse() {
 }
 
 std::unique_ptr<DeclarationNode> Parser::parseDeclaration() {
+    //std::cerr << "parseDeclaration called, current token: " << tokenTypeToStringFunc(peek().type) << " '" << peek().lexeme << "'" << std::endl;
+    
+    if (match(TokenType::KW_EXTERN)) {
+        //std::cerr << "  -> extern function" << std::endl;
+        return parseFunctionDeclaration(true);
+    }
     if (match(TokenType::KW_FN)) {
-        return parseFunctionDeclaration();
+        //std::cerr << "  -> function" << std::endl;
+        return parseFunctionDeclaration(false);
     }
     if (match(TokenType::KW_STRUCT)) {
+        //std::cerr << "  -> struct" << std::endl;
         return parseStructDeclaration();
     }
     
+    // Глобальные переменные
+    if (check(TokenType::KW_INT) || check(TokenType::KW_FLOAT) || 
+        check(TokenType::KW_BOOL) || check(TokenType::KW_STRING) ||
+        check(TokenType::IDENTIFIER)) {
+        //std::cerr << "  -> global variable" << std::endl;
+        return std::make_unique<GlobalVarDeclNode>(parseVariableDeclaration(true));
+    }
     
+    //std::cerr << "  -> null" << std::endl;
     synchronize();
     return nullptr;
 }
 
-std::unique_ptr<FunctionDeclNode> Parser::parseFunctionDeclaration() {
+std::unique_ptr<FunctionDeclNode> Parser::parseFunctionDeclaration(bool isExtern) {
     Token fnToken = previous();
+    
+    // Для extern: пропускаем 'fn' если он есть
+    if (isExtern && check(TokenType::KW_FN)) {
+        advance(); // пропускаем 'fn'
+    }
     
     // Имя функции
     if (!check(TokenType::IDENTIFIER)) {
@@ -115,6 +136,18 @@ std::unique_ptr<FunctionDeclNode> Parser::parseFunctionDeclaration() {
     // Параметры
     if (!check(TokenType::RPAREN)) {
         do {
+            // Проверяем на variadic (...)
+            if (match(TokenType::DOT)) {
+                if (match(TokenType::DOT) && match(TokenType::DOT)) {
+                    funcDecl->isVariadic = true;
+                    break;
+                } else {
+                    errorReporter.reportGeneralError(peek().line, peek().column, 
+                        "Expected '...' for variadic function");
+                    break;
+                }
+            }
+            
             Type paramType = parseType();
             if (paramType.kind == TypeKind::VOID) {
                 errorReporter.reportGeneralError(peek().line, peek().column, 
@@ -128,6 +161,15 @@ std::unique_ptr<FunctionDeclNode> Parser::parseFunctionDeclaration() {
             }
             Token paramName = advance();
             
+            // Проверяем, является ли параметр массивом: int arr[]
+            if (match(TokenType::LBRACKET)) {
+                if (!match(TokenType::RBRACKET)) {
+                    errorReporter.reportMissingBracket(peek().line, peek().column);
+                }
+                // Помечаем тип как массив (указатель)
+                paramType = Type(new Type(paramType), 0); // 0 = динамический размер
+            }
+            
             funcDecl->addParameter(paramType, paramName.lexeme);
             
         } while (match(TokenType::COMMA) && !isAtEnd());
@@ -136,10 +178,12 @@ std::unique_ptr<FunctionDeclNode> Parser::parseFunctionDeclaration() {
     // Закрывающая скобка
     if (!match(TokenType::RPAREN)) {
         errorReporter.reportMissingParen(peek().line, peek().column);
-        while (!isAtEnd() && !check(TokenType::LBRACE) && !check(TokenType::ARROW)) {
+        while (!isAtEnd() && !check(TokenType::LBRACE) && !check(TokenType::ARROW) && !check(TokenType::SEMICOLON)) {
             advance();
         }
     }
+    
+
     
     // Возвращаемый тип
     if (match(TokenType::ARROW)) {
@@ -148,6 +192,14 @@ std::unique_ptr<FunctionDeclNode> Parser::parseFunctionDeclaration() {
     }
     
     // Тело функции
+    if (isExtern) {
+        // Для extern функций тело не требуется — только точка с запятой
+        if (!match(TokenType::SEMICOLON)) {
+            errorReporter.reportMissingSemicolon(peek().line, peek().column, peek().lexeme);
+        }
+        return funcDecl;
+    }
+    
     if (!check(TokenType::LBRACE)) {
         errorReporter.reportMissingBrace(peek().line, peek().column);
         return funcDecl;
@@ -212,19 +264,35 @@ std::unique_ptr<VarDeclStmtNode> Parser::parseVariableDeclaration(bool requireSe
     
     // Проверяем, является ли это массивом: int arr[N]
     if (match(TokenType::LBRACKET)) {
-        // Это массив
         if (match(TokenType::INT_LITERAL)) {
             int arraySize = std::stoi(previous().lexeme);
             varDecl->varType = Type(new Type(varType), arraySize);
         }
-        // Также может быть пустой массив: int arr[]
         if (!match(TokenType::RBRACKET)) {
             errorReporter.reportMissingBracket(peek().line, peek().column);
+        }
+        
+        // Проверяем вторую размерность: int arr[3][4]
+        if (match(TokenType::LBRACKET)) {
+            if (match(TokenType::INT_LITERAL)) {
+                int dim2 = std::stoi(previous().lexeme);
+                // Создаём двумерный массив как массив массивов
+                varDecl->varType = Type(new Type(new Type(varType), dim2), varDecl->varType.arraySize);
+            }
+            if (!match(TokenType::RBRACKET)) {
+                errorReporter.reportMissingBracket(peek().line, peek().column);
+            }
         }
     }
     
     if (match(TokenType::EQUAL)) {
-        varDecl->initializer = parseExpression();
+        // Проверяем, является ли это инициализацией массива {1, 2, 3}
+        if (check(TokenType::LBRACE)) {
+            // Сохраняем информацию для IRGenerator
+            varDecl->initializer = parseInitializerList();
+        } else {
+            varDecl->initializer = parseExpression();
+        }
     }
     
     if (requireSemicolon) {
@@ -797,6 +865,27 @@ std::unique_ptr<ExpressionNode> Parser::parsePostfix() {
     }
     
     return expr;
+}
+
+std::unique_ptr<ExpressionNode> Parser::parseInitializerList() {
+    Token lbrace = advance(); // consume '{'
+    
+    auto list = std::make_unique<InitListExprNode>(lbrace.line, lbrace.column);
+    
+    if (!check(TokenType::RBRACE)) {
+        do {
+            auto expr = parseExpression();
+            if (expr) {
+                list->addValue(std::move(expr));
+            }
+        } while (match(TokenType::COMMA));
+    }
+    
+    if (!match(TokenType::RBRACE)) {
+        errorReporter.reportMissingBrace(peek().line, peek().column);
+    }
+    
+    return list;
 }
 
 Type Parser::parseType() {

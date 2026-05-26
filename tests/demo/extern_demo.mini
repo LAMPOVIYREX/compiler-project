@@ -1,0 +1,60 @@
+extern printf(string format, ...) -> int;
+extern puts(string s) -> int;
+extern malloc(int size) -> int;
+extern free(int ptr) -> int;
+extern strlen(string s) -> int;
+extern strcmp(string s1, string s2) -> int;
+extern strcpy(int dest, string src) -> int;
+extern memcpy(int dest, int src, int n) -> int;
+extern memset(int ptr, int value, int n) -> int;
+
+fn main() -> int {
+    printf("========== MiniLang External Functions Demo ==========\n\n");
+    
+    printf("--- I/O Functions ---\n");
+    printf("1. printf() - formatted output:       OK\n");
+    puts("2. puts() - simple string output:      OK");
+    
+    printf("\n--- Memory Functions ---\n");
+    
+    int ptr1 = malloc(100);
+    int ptr2 = malloc(200);
+    
+    if (ptr1 != 0) {
+        if (ptr2 != 0) {
+            printf("3. malloc(100) - allocate 100 bytes:  ptr=%d\n", ptr1);
+            printf("4. malloc(200) - allocate 200 bytes:  ptr=%d\n", ptr2);
+            
+            memset(ptr1, 0, 100);
+            printf("5. memset(ptr1, 0, 100) - fill zeros: OK\n");
+            
+            memcpy(ptr2, ptr1, 100);
+            printf("6. memcpy(ptr2, ptr1, 100) - copy:    OK\n");
+            
+            free(ptr1);
+            free(ptr2);
+            printf("7. free() - release memory:           OK\n");
+        }
+    }
+    
+    printf("\n--- String Functions ---\n");
+    
+    int len = strlen("MiniLang");
+    printf("8. strlen(\"MiniLang\") = %d\n", len);
+    
+    int cmp = strcmp("abc", "abc");
+    if (cmp == 0) {
+        printf("9. strcmp(\"abc\", \"abc\") = 0\n");
+    }
+    
+    int buf = malloc(100);
+    if (buf != 0) {
+        strcpy(buf, "test");
+        printf("10. strcpy(buf, \"test\"):             OK\n");
+        free(buf);
+    }
+    
+    printf("\n========== All 10 functions work! ==========\n");
+    
+    return 42;
+}

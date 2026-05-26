@@ -1,0 +1,11 @@
+extern malloc(int size) -> int;
+extern free(int ptr) -> int;
+
+fn main() -> int {
+    int ptr = malloc(8);
+    if (ptr != 0) {
+        free(ptr);
+        return 42;
+    }
+    return 1;
+}

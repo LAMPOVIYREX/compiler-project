@@ -41,7 +41,7 @@ private:
     // Основные методы разбора
     std::unique_ptr<ProgramNode> parseProgram();
     std::unique_ptr<DeclarationNode> parseDeclaration();
-    std::unique_ptr<FunctionDeclNode> parseFunctionDeclaration();
+    std::unique_ptr<FunctionDeclNode> parseFunctionDeclaration(bool isExtern = false);
     std::unique_ptr<StructDeclNode> parseStructDeclaration();
     std::unique_ptr<VarDeclStmtNode> parseVariableDeclaration(bool requireSemicolon = true);
     
@@ -64,6 +64,7 @@ private:
     std::unique_ptr<ExpressionNode> parseUnary();
     std::unique_ptr<ExpressionNode> parsePostfix();
     std::unique_ptr<ExpressionNode> parsePrimary();
+    std::unique_ptr<ExpressionNode> parseInitializerList();
     std::unique_ptr<CallExprNode> parseCall(const std::string& callee);
     
     Type parseType();

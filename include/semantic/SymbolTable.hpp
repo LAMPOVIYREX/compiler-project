@@ -29,6 +29,7 @@ struct SymbolInfo {
     std::optional<Type> returnType;
     std::vector<Type> parameterTypes;
     std::vector<std::string> parameterNames;
+    bool isVariadic = false;
     
     // Для структур
     std::unordered_map<std::string, Type> fields;

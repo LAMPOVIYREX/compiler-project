@@ -1,0 +1,13 @@
+extern malloc(int size) -> int;
+extern memset(int ptr, int value, int n) -> int;
+extern printf(string format, ...) -> int;
+
+fn main() -> int {
+    int ptr = malloc(100);
+    if (ptr != 0) {
+        memset(ptr, 0, 100);
+        printf("memset works!\n");
+        return 42;
+    }
+    return 1;
+}

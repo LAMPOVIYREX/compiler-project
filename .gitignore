@@ -75,4 +75,13 @@ float_test.o
 
 # Core dumps
 core
-*.core
+*.core# Compiled binaries
+minicompiler
+read_int_test
+test_program
+
+# Sprint output files
+sprint*.txt
+
+# Test mini files in root
+test_*.mini

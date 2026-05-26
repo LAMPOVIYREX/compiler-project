@@ -1,0 +1,8 @@
+int globalArr[5];
+
+fn main() -> int {
+    globalArr[0] = 10;
+    globalArr[1] = 20;
+    globalArr[2] = 30;
+    return globalArr[0] + globalArr[1] + globalArr[2];
+}

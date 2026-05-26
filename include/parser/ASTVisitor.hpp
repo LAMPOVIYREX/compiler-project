@@ -29,6 +29,9 @@ public:
     virtual void visit(FunctionDeclNode& node) = 0;
     virtual void visit(StructDeclNode& node) = 0;
     virtual void visit(ProgramNode& node) = 0;
+
+    virtual void visit(InitListExprNode& node) = 0;
+    virtual void visit(GlobalVarDeclNode& node) = 0;
 };
 
 } // namespace minicompiler

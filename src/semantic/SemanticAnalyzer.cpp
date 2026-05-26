@@ -95,15 +95,16 @@ void SemanticAnalyzer::setExpressionType(ExpressionNode* expr, const Type& type)
 }
 
 bool SemanticAnalyzer::isTypeCompatible(const Type& expected, const Type& actual) {
-    // Если один из типов ERROR, считаем несовместимыми
     if (expected.isError() || actual.isError()) return false;
     
-    // Одинаковые типы всегда совместимы
     if (expected.kind == actual.kind) {
         if (expected.kind == TypeKind::STRUCT) {
             return expected.structName == actual.structName;
         }
-        return true;
+        if (expected.kind == TypeKind::ARRAY) {
+            return actual.isArray();  // массивы совместимы по указателю
+        }
+        return true;  // int=int, float=float, bool=bool, string=string
     }
     
     // int -> float разрешено
@@ -224,17 +225,14 @@ TypeCheckResult SemanticAnalyzer::checkUnaryOp(UnaryOp op, const Type& operand, 
 //=============================================================================
 
 void SemanticAnalyzer::visit(ProgramNode& node) {
-    // 🔑 ПЕРВЫЙ ПРОХОД: Собираем ВСЕ объявления функций и структур в глобальную область
+    // ПЕРВЫЙ ПРОХОД: Собираем ВСЕ объявления функций и структур в глобальную область
     for (auto& decl : node.declarations) {
         if (auto funcDecl = dynamic_cast<FunctionDeclNode*>(decl.get())) {
-            // Проверяем дублирование
+            // Для extern функций проверяем только что нет дубликата
             if (symbolTable.lookup(funcDecl->name)) {
-                reportError(funcDecl->getLine(), funcDecl->getColumn(),
-                    "Повторное объявление функции '" + funcDecl->name + "'");
                 continue;
             }
             
-            // Создаем символ функции
             auto symbol = std::make_shared<SymbolInfo>(
                 funcDecl->name, funcDecl->returnType, SymbolKind::FUNCTION,
                 funcDecl->getLine(), funcDecl->getColumn());
@@ -244,8 +242,8 @@ void SemanticAnalyzer::visit(ProgramNode& node) {
                 symbol->parameterTypes.push_back(param.first);
                 symbol->parameterNames.push_back(param.second);
             }
-            
-            // Добавляем в глобальную таблицу символов
+            symbol->isVariadic = funcDecl->isVariadic;
+
             symbolTable.insert(funcDecl->name, symbol);
         }
         else if (auto structDecl = dynamic_cast<StructDeclNode*>(decl.get())) {
@@ -259,9 +257,7 @@ void SemanticAnalyzer::visit(ProgramNode& node) {
                 structDecl->name, Type(structDecl->name), SymbolKind::STRUCT,
                 structDecl->getLine(), structDecl->getColumn());
             
-            // Собираем поля структуры
             for (const auto& field : structDecl->fields) {
-                // Проверяем дублирование полей
                 if (symbol->fields.find(field->name) != symbol->fields.end()) {
                     reportError(field->getLine(), field->getColumn(),
                         "Повторное объявление поля '" + field->name + "' в структуре '" + structDecl->name + "'");
@@ -271,16 +267,33 @@ void SemanticAnalyzer::visit(ProgramNode& node) {
             
             symbolTable.insert(structDecl->name, symbol);
         }
+        else if (auto globalVar = dynamic_cast<GlobalVarDeclNode*>(decl.get())) {
+            // Глобальная переменная — добавляем в таблицу символов
+            if (globalVar->varDecl) {
+                auto& vd = globalVar->varDecl;
+                if (symbolTable.lookup(vd->name)) {
+                    reportError(vd->getLine(), vd->getColumn(),
+                        "Повторное объявление глобальной переменной '" + vd->name + "'");
+                    continue;
+                }
+                
+                auto symbol = std::make_shared<SymbolInfo>(
+                    vd->name, vd->varType, SymbolKind::VARIABLE,
+                    vd->getLine(), vd->getColumn());
+                
+                symbolTable.insert(vd->name, symbol);
+            }
+        }
     }
     
-    // 🔑 ВТОРОЙ ПРОХОД: Анализируем тела функций
+    // ВТОРОЙ ПРОХОД: Анализируем тела функций
     for (auto& decl : node.declarations) {
         if (auto funcDecl = dynamic_cast<FunctionDeclNode*>(decl.get())) {
-            funcDecl->accept(*this);
+            if (funcDecl->body) {
+                funcDecl->accept(*this);
+            }
         }
-        else if (auto structDecl = dynamic_cast<StructDeclNode*>(decl.get())) {
-            structDecl->accept(*this);
-        }
+        
     }
 }
 
@@ -293,7 +306,14 @@ void SemanticAnalyzer::visit(FunctionDeclNode& node) {
     
     // Сбрасываем смещение стека для функции
     currentStackOffset = 0;
-    
+    // Проверка на void параметры
+    for (const auto& param : node.parameters) {
+        if (param.first.kind == TypeKind::VOID) {
+            reportError(node.getLine(), node.getColumn(),
+                "Параметр не может иметь тип void: '" + param.second + "'");
+        }
+    }
+
     // Добавляем параметры в область видимости функции
     for (size_t i = 0; i < node.parameters.size(); i++) {
         const auto& param = node.parameters[i];
@@ -357,16 +377,21 @@ void SemanticAnalyzer::visit(VarDeclStmtNode& node) {
         node.getLine(), node.getColumn());
     
     if (node.initializer) {
-        node.initializer->accept(*this);
-        Type initType = getExpressionType(node.initializer.get());
-        
-        if (!isAssignable(node.varType, initType)) {
-            reportError(node.getLine(), node.getColumn(),
-                "Несовместимые типы при инициализации: '" +
-                node.varType.toString() + " = " + initType.toString() + "'");
-            symbol->type = Type(TypeKind::ERROR);
-        } else {
+        // Для InitListExprNode пропускаем проверку типа (массивы)
+        if (dynamic_cast<InitListExprNode*>(node.initializer.get())) {
             symbol->initialized = true;
+        } else {
+            node.initializer->accept(*this);
+            Type initType = getExpressionType(node.initializer.get());
+            
+            if (!isAssignable(node.varType, initType)) {
+                reportError(node.getLine(), node.getColumn(),
+                    "Несовместимые типы при инициализации: '" +
+                    node.varType.toString() + " = " + initType.toString() + "'");
+                symbol->type = SemanticAnalyzer::getErrorType();
+            } else {
+                symbol->initialized = true;
+            }
         }
     }
     
@@ -550,12 +575,25 @@ void SemanticAnalyzer::visit(CallExprNode& node) {
         return;
     }
     
-    // Проверяем количество аргументов
-    if (node.arguments.size() != symbol->parameterTypes.size()) {
-        reportError(node.getLine(), node.getColumn(),
-            "Неверное количество аргументов: ожидалось " +
-            std::to_string(symbol->parameterTypes.size()) +
-            ", получено " + std::to_string(node.arguments.size()));
+    bool isVariadic = symbol->isVariadic;
+    
+    if (isVariadic) {
+        // Variadic: аргументов должно быть не меньше, чем обязательных параметров
+        size_t requiredParams = symbol->parameterTypes.size();
+        if (node.arguments.size() < requiredParams) {
+            reportError(node.getLine(), node.getColumn(),
+                "Неверное количество аргументов для variadic функции '" + node.callee + 
+                "': ожидалось минимум " + std::to_string(requiredParams) +
+                ", получено " + std::to_string(node.arguments.size()));
+        }
+    } else {
+        // Обычная функция: точное совпадение
+        if (node.arguments.size() != symbol->parameterTypes.size()) {
+            reportError(node.getLine(), node.getColumn(),
+                "Неверное количество аргументов: ожидалось " +
+                std::to_string(symbol->parameterTypes.size()) +
+                ", получено " + std::to_string(node.arguments.size()));
+        }
     }
     
     // Проверяем типы аргументов
@@ -607,6 +645,14 @@ void SemanticAnalyzer::visit(IndexExprNode& node) {
     } else {
         setExpressionType(&node, Type(TypeKind::ERROR));
     }
+}
+
+void SemanticAnalyzer::visit(InitListExprNode& node) {
+    (void)node;
+}
+
+void SemanticAnalyzer::visit(GlobalVarDeclNode& node) {
+    node.varDecl->accept(*this);
 }
 
 void SemanticAnalyzer::visit(MemberAccessExprNode& node) {

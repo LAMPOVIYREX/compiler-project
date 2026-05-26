@@ -1,0 +1,6 @@
+fn main() -> int {
+    int a = 10 + 20;
+    int b = a * 2;
+    int c = b - 15;
+    return c;
+}

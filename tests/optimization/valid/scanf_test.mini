@@ -1,0 +1,10 @@
+extern printf(string format, ...) -> int;
+extern scanf(string format, ...) -> int;
+
+fn main() -> int {
+    int x = 0;
+    printf("Enter a number: ");
+    scanf("%d", x);
+    printf("You entered: %d\n", x);
+    return 42;
+}

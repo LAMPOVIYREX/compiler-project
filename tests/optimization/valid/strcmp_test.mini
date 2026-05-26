@@ -1,0 +1,10 @@
+extern strcmp(string s1, string s2) -> int;
+extern printf(string format, ...) -> int;
+
+fn main() -> int {
+    int result = strcmp("abc", "abc");
+    if (result == 0) {
+        return 42;
+    }
+    return 0;
+}

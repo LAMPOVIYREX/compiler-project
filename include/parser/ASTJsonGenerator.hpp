@@ -22,6 +22,8 @@ public:
     void visit(CallExprNode& node) override;
     void visit(IndexExprNode& node) override;
     void visit(MemberAccessExprNode& node) override;
+    void visit(GlobalVarDeclNode& node) override;
+    void visit(InitListExprNode& node) override;
     
     // Statement nodes
     void visit(BlockStmtNode& node) override;

@@ -1,0 +1,15 @@
+ОШИБКА [GEN-400]: Несовместимый тип аргумента 1: ожидался 'string', получен 'int'
+Файл:tests/semantic/invalid/argument_errors/extern_type/type.src
+Строка:5, позиция:12
+Код:    printf(42);
+           ^
+Подсказка:Проверьте синтаксис кода
+
+ОШИБКА [GEN-400]: Несовместимый тип аргумента 1: ожидался 'int', получен 'string'
+Файл:tests/semantic/invalid/argument_errors/extern_type/type.src
+Строка:6, позиция:20
+Код:    int x = malloc("wrong");
+                   ^
+Подсказка:Проверьте синтаксис кода
+
+Всего ошибок:2

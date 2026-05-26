@@ -157,7 +157,8 @@ std::vector<TestCase> discoverTests(const std::string& baseDir) {
         {"Nested scopes", "nested_scopes/nested"},
         {"Multiple functions", "functions/multiple"},
         {"Recursive functions", "functions/recursive"},
-        {"Structs basic", "structs/basic"}
+        {"Structs basic", "structs/basic"},
+        {"Extern functions basic", "functions/extern_basic"}
     };
     
     for (const auto& [name, path] : validTests) {
@@ -181,7 +182,8 @@ std::vector<TestCase> discoverTests(const std::string& baseDir) {
         {"Wrong argument type", "argument_errors/type"},
         {"Wrong return type", "return_errors/wrong_type"},
         {"Cascade errors", "type_mismatch/cascade_errors"},
-        //{"Missing return", "return_errors/missing"}
+        {"Extern type mismatch", "argument_errors/extern_type/type"},
+        {"Extern wrong type", "extern_errors/wrong_type"}
     };
     
     for (const auto& [name, path] : invalidTests) {

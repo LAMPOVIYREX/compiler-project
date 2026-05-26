@@ -49,7 +49,7 @@ private:
     
     std::vector<GlobalVar> globalVars;
     std::vector<std::string> stringLiterals;
-    std::unordered_set<std::string> externFunctions;
+    std::unordered_set<std::string> globalArrayNames;
     
     int labelCounter = 0;
     int stringLabelCounter = 0;
@@ -89,7 +89,15 @@ private:
 
     
     std::string getFloatOperand(const IROperand& op);
+    void emitAddressLoad(const IROperand& addr);
     void saveFloatResult(const IROperand& dest);
+
+
+    std::unordered_map<std::string, int> externFunctions; 
+    std::vector<std::string> rodataStrings;              
+    
+    void generateExternCall(IRInstruction& instr);
+    std::string getStringLabel(const std::string& str);
     
     static constexpr const char* PARAM_REGS[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
     static constexpr const char* CALLER_SAVED[] = {"rax", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11"};
