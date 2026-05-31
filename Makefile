@@ -19,10 +19,10 @@ MAIN_SRC = src/main.cpp
 # Исходные файлы (Спринт 2 - Парсер)
 # ============================================
 PARSER_SRCS = src/parser/Parser.cpp \
-              src/parser/AST.cpp \
-              src/parser/ASTPrettyPrinter.cpp \
-              src/parser/ASTDotGenerator.cpp \
-              src/parser/ASTJsonGenerator.cpp 
+			  src/parser/AST.cpp \
+			  src/parser/ASTPrettyPrinter.cpp \
+			  src/parser/ASTDotGenerator.cpp \
+			  src/parser/ASTJsonGenerator.cpp 
 
 # ============================================
 # Исходные файлы (Спринт 3 - Семантический анализ)
@@ -39,9 +39,9 @@ SSA_SRCS = src/ir/SSA.cpp src/ir/SSABuilder.cpp
 # Исходные файлы (Спринт 5/6/7 - Кодогенерация x86-64)
 # ============================================
 CODEGEN_SRCS = src/codegen/X86Generator.cpp \
-               src/codegen/LabelManager.cpp \
-               src/codegen/StackFrame.cpp \
-               src/codegen/AssemblyEmitter.cpp
+			   src/codegen/LabelManager.cpp \
+			   src/codegen/StackFrame.cpp \
+			   src/codegen/AssemblyEmitter.cpp
 CODEGEN_OBJS = $(CODEGEN_SRCS:.cpp=.o)
 
 # ============================================
@@ -239,7 +239,18 @@ test-codegen: $(TARGET) $(RUNTIME_OBJ)
 		echo "❌ test_codegen.sh not found"; \
 	fi
 
-test-all: build-tests test-lexer test-parser-all test-semantic test-ir test-ssa test-codegen
+test-regression: $(TARGET) $(RUNTIME_OBJ)
+	@echo "========================================"
+	@echo "=== РЕГРЕССИОННЫЕ ТЕСТЫ ==="
+	@echo "========================================"
+	@if [ -f tests/regression/run_regression.sh ]; then \
+		chmod +x tests/regression/run_regression.sh; \
+		./tests/regression/run_regression.sh; \
+	else \
+		echo "❌ Regression test script not found"; \
+	fi
+
+test-all: build-tests test-lexer test-parser-all test-semantic test-ir test-ssa test-codegen test-regression
 	@echo ""
 	@echo "=========================================="
 	@echo "=== ВСЕ ТЕСТЫ ПРОЙДЕНЫ! ==="
@@ -437,6 +448,27 @@ build-and-run-extern: $(TARGET)
 	"/tmp/$$name.out"; \
 	echo "Exit code: $$?"; \
 	rm -f "/tmp/$$name.asm" "/tmp/$$name.o" "/tmp/$$name.out"
+
+install: $(TARGET)
+	@echo "Installing minicompiler to /usr/local/bin..."
+	@cp $(TARGET) /usr/local/bin/minicompiler
+	@if [ -f docs/minicompiler.1 ]; then \
+		mkdir -p /usr/local/share/man/man1; \
+		cp docs/minicompiler.1 /usr/local/share/man/man1/minicompiler.1; \
+		echo "Man page installed."; \
+	fi
+	@if [ -f scripts/completion.sh ]; then \
+		mkdir -p /etc/bash_completion.d; \
+		cp scripts/completion.sh /etc/bash_completion.d/minicompiler; \
+		echo "Tab completion installed."; \
+	fi
+	@echo "✅ Installed successfully"
+
+install-completion:
+	@if [ -f scripts/completion.sh ]; then \
+		cp scripts/completion.sh /etc/bash_completion.d/minicompiler; \
+		echo "Tab completion installed."; \
+	fi
 # ============================================
 # Справка
 # ============================================
@@ -482,10 +514,10 @@ help:
 	@echo "============================================"
 
 .PHONY: all build-tests runtime clean clean-actual clean-all \
-        test-lexer test-parser test-parser-errors test-parser-all \
-        test-semantic test-ir test-ssa test-codegen test-all \
-        check-lexer check-parser check-semantic check-ir check-ssa check-codegen check-all \
-        check-graphviz ast-file \
-        run-lexer run-parser run-check run-ir run-ssa run-codegen \
-        build-and-run build-and-run-extern \
-        help
+		test-lexer test-parser test-parser-errors test-parser-all \
+		test-semantic test-ir test-ssa test-codegen test-all \
+		check-lexer check-parser check-semantic check-ir check-ssa check-codegen check-all \
+		check-graphviz ast-file \
+		run-lexer run-parser run-check run-ir run-ssa run-codegen \
+		build-and-run build-and-run-extern \
+		help

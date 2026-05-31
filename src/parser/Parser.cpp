@@ -248,6 +248,10 @@ std::unique_ptr<StructDeclNode> Parser::parseStructDeclaration() {
 }
 
 std::unique_ptr<VarDeclStmtNode> Parser::parseVariableDeclaration(bool requireSemicolon) {
+    bool isHeap = false;
+    if (match(TokenType::KW_HEAP)) {
+        isHeap = true;
+    }
     Type varType = parseType();
     
     if (!check(TokenType::IDENTIFIER)) {
@@ -261,6 +265,8 @@ std::unique_ptr<VarDeclStmtNode> Parser::parseVariableDeclaration(bool requireSe
         varType,
         nameToken.lexeme
     );
+
+    varDecl->isHeap = isHeap;
     
     // Проверяем, является ли это массивом: int arr[N]
     if (match(TokenType::LBRACKET)) {
@@ -359,7 +365,8 @@ std::unique_ptr<StatementNode> Parser::parseStatement() {
     }
     
     Token peekToken = peek();
-    if (peekToken.type == TokenType::KW_INT || 
+    if (peekToken.type == TokenType::KW_HEAP ||
+        peekToken.type == TokenType::KW_INT || 
         peekToken.type == TokenType::KW_FLOAT ||
         peekToken.type == TokenType::KW_BOOL ||
         peekToken.type == TokenType::KW_STRING) {

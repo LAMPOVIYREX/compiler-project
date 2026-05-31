@@ -162,39 +162,45 @@ void IRGenerator::visit(VarDeclStmtNode& node) {
     // Для массивов выделяем память
     if (node.varType.isArray()) {
         int arraySize = node.varType.arraySize;
-        int elementSize = 8; // размер элемента в байтах
+        int elementSize = 8;
         
-        // Для двумерного массива: int arr[3][4] -> 3 * 4 * 8 байт
         if (node.varType.elementType && node.varType.elementType->isArray()) {
             arraySize = node.varType.arraySize * node.varType.elementType->arraySize;
         }
         
         if (arraySize > 0) {
-            emit(IROpcode::ALLOCA, var, IROperand::literal(arraySize * elementSize), IROperand(),
-                 "allocate array " + node.name + "[" + std::to_string(arraySize) + "]");
-        }
-        
-        // Если есть инициализатор-список {1, 2, 3}
-        if (node.initializer) {
-            if (auto initList = dynamic_cast<InitListExprNode*>(node.initializer.get())) {
-                for (size_t i = 0; i < initList->values.size(); i++) {
-                    IROperand value = generateExpression(initList->values[i].get());
-                    IROperand index = IROperand::literal((int)i);
-                    IROperand addr = newTemp();
-                    IROperand offset = newTemp();
-                    emit(IROpcode::MUL, offset, index, IROperand::literal(8));
-                    emit(IROpcode::ADD, addr, var, offset);
-                    emit(IROpcode::STORE, addr, value);
-                }
+            if (node.isHeap) {
+                // heap массив: выделяем через malloc
+                IROperand sizeOp = IROperand::literal(arraySize * elementSize);
+                IROperand result = newTemp(IRType::INT);
+                emit(IROpcode::PARAM, IROperand(), sizeOp);
+                emit(IROpcode::CALL, result, IROperand::label("malloc"));
+                emit(IROpcode::MOVE, var, result);
+                currentFunction->heapArrays.push_back(node.name);
+            } else {
+                // обычный массив на стеке
+                emit(IROpcode::ALLOCA, var, IROperand::literal(arraySize * elementSize), IROperand(),
+                     "allocate array " + node.name + "[" + std::to_string(arraySize) + "]");
             }
         }
-        return;
     }
     
     if (node.initializer) {
-        IROperand init = generateExpression(node.initializer.get());
-        init = convertOperand(init, varType);
-        emit(IROpcode::MOVE, var, init);
+        if (auto initList = dynamic_cast<InitListExprNode*>(node.initializer.get())) {
+            for (size_t i = 0; i < initList->values.size(); i++) {
+                IROperand value = generateExpression(initList->values[i].get());
+                IROperand index = IROperand::literal((int)i);
+                IROperand addr = newTemp();
+                IROperand offset = newTemp();
+                emit(IROpcode::MUL, offset, index, IROperand::literal(8));
+                emit(IROpcode::ADD, addr, var, offset);
+                emit(IROpcode::STORE, addr, value);
+            }
+        } else {
+            IROperand init = generateExpression(node.initializer.get());
+            init = convertOperand(init, varType);
+            emit(IROpcode::MOVE, var, init);
+        }
     }
 }
 
@@ -575,6 +581,15 @@ void IRGenerator::visit(CallExprNode& node) {
     }
     
     // Вызываем функцию
+    // Если функция ещё не добавлена в программу (extern), добавляем её как пустую
+    if (!program->functionMap.count(node.callee)) {
+        auto symbol = symbolTable.lookup(node.callee);
+        IRType retType = IRType::INT;
+        if (symbol && symbol->returnType.has_value()) {
+            retType = convertType(symbol->returnType.value());
+        }
+        program->createFunction(node.callee, retType);
+    }
     IROperand result = newTemp(returnType);
     emit(IROpcode::CALL, result, IROperand::label(node.callee));
     

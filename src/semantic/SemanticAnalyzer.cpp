@@ -4,7 +4,6 @@
 
 namespace minicompiler {
 
-// Вспомогательные функции
 int SemanticAnalyzer::align(int offset, int alignment) {
     return (offset + alignment - 1) & ~(alignment - 1);
 }
@@ -58,8 +57,8 @@ void SemanticAnalyzer::printMemoryLayout() const {
     std::cerr << symbolTable.getMemoryLayoutString();
 }
 
-SemanticAnalyzer::SemanticAnalyzer(ErrorReporter& errorReporter)
-    : errorReporter(errorReporter), errorCount(0), inFunction(false) {}
+SemanticAnalyzer::SemanticAnalyzer(ErrorReporter& errorReporter, bool warnings, bool werror, bool wnoUnused)
+    : errorReporter(errorReporter), errorCount(0), inFunction(false), warnings(warnings), werror(werror), wnoUnused(wnoUnused) {}
 
 bool SemanticAnalyzer::analyze(ProgramNode& program) {
     errorCount = 0;
@@ -104,7 +103,7 @@ bool SemanticAnalyzer::isTypeCompatible(const Type& expected, const Type& actual
         if (expected.kind == TypeKind::ARRAY) {
             return actual.isArray();  // массивы совместимы по указателю
         }
-        return true;  // int=int, float=float, bool=bool, string=string
+        return true;
     }
     
     // int -> float разрешено
@@ -123,12 +122,10 @@ bool SemanticAnalyzer::isAssignable(const Type& target, const Type& source) {
 
 TypeCheckResult SemanticAnalyzer::checkBinaryOp(BinaryOp op, const Type& left, 
                                                  const Type& right, int line, int col) {
-    // Если один из операндов - ERROR, возвращаем ERROR
     if (left.isError() || right.isError()) {
         return TypeCheckResult(Type(TypeKind::ERROR));
     }
     
-    // Логические операторы
     if (op == BinaryOp::AND || op == BinaryOp::OR) {
         if (left.kind != TypeKind::BOOL || right.kind != TypeKind::BOOL) {
             std::stringstream ss;
@@ -140,7 +137,6 @@ TypeCheckResult SemanticAnalyzer::checkBinaryOp(BinaryOp op, const Type& left,
         return Type(TypeKind::BOOL);
     }
     
-    // Операторы сравнения
     if (op == BinaryOp::EQ || op == BinaryOp::NE || 
         op == BinaryOp::LT || op == BinaryOp::LE || 
         op == BinaryOp::GT || op == BinaryOp::GE) {
@@ -155,7 +151,6 @@ TypeCheckResult SemanticAnalyzer::checkBinaryOp(BinaryOp op, const Type& left,
         return Type(TypeKind::BOOL);
     }
     
-    // Арифметические операторы
     if (op == BinaryOp::ADD || op == BinaryOp::SUB || 
         op == BinaryOp::MUL || op == BinaryOp::DIV || op == BinaryOp::MOD) {
         
@@ -174,7 +169,6 @@ TypeCheckResult SemanticAnalyzer::checkBinaryOp(BinaryOp op, const Type& left,
         return Type(TypeKind::INT);
     }
     
-    // Операторы присваивания
     if (op == BinaryOp::ASSIGN || op == BinaryOp::ADD_ASSIGN || 
         op == BinaryOp::SUB_ASSIGN || op == BinaryOp::MUL_ASSIGN ||
         op == BinaryOp::DIV_ASSIGN || op == BinaryOp::MOD_ASSIGN) {
@@ -242,8 +236,8 @@ void SemanticAnalyzer::visit(ProgramNode& node) {
                 symbol->parameterTypes.push_back(param.first);
                 symbol->parameterNames.push_back(param.second);
             }
+            
             symbol->isVariadic = funcDecl->isVariadic;
-
             symbolTable.insert(funcDecl->name, symbol);
         }
         else if (auto structDecl = dynamic_cast<StructDeclNode*>(decl.get())) {
@@ -293,7 +287,6 @@ void SemanticAnalyzer::visit(ProgramNode& node) {
                 funcDecl->accept(*this);
             }
         }
-        
     }
 }
 
@@ -304,16 +297,8 @@ void SemanticAnalyzer::visit(FunctionDeclNode& node) {
     
     symbolTable.enterScope();
     
-    // Сбрасываем смещение стека для функции
     currentStackOffset = 0;
-    // Проверка на void параметры
-    for (const auto& param : node.parameters) {
-        if (param.first.kind == TypeKind::VOID) {
-            reportError(node.getLine(), node.getColumn(),
-                "Параметр не может иметь тип void: '" + param.second + "'");
-        }
-    }
-
+    
     // Добавляем параметры в область видимости функции
     for (size_t i = 0; i < node.parameters.size(); i++) {
         const auto& param = node.parameters[i];
@@ -330,7 +315,6 @@ void SemanticAnalyzer::visit(FunctionDeclNode& node) {
             paramName, paramType, SymbolKind::PARAMETER,
             node.getLine(), node.getColumn());
         
-        // Выделяем место для параметра в стеке
         int size = paramType.getSize();
         int alignment = paramType.getAlignment();
         allocateVariable(paramName, size, alignment);
@@ -343,15 +327,31 @@ void SemanticAnalyzer::visit(FunctionDeclNode& node) {
         calculateStackOffsets(*node.body);
     }
     
+    // Проверка неиспользуемых переменных
+    if (warnings && !wnoUnused) {
+        for (auto& [name, sym] : symbolTable.getCurrentScope()) {
+            if (sym->kind == SymbolKind::VARIABLE && !sym->used) {
+                if (werror) {
+                    errorReporter.addError(ErrorCode::GEN_SYNTAX_ERROR,
+                        "неиспользуемая переменная '" + name + "'",
+                        sym->line, sym->column, 1);
+                } else {
+                    errorReporter.addWarning(ErrorCode::GEN_SYNTAX_ERROR,
+                        "Неиспользуемая переменная '" + name + "'",
+                        sym->line, sym->column, 1);
+                }
+            }
+        }
+    }
+    
     symbolTable.exitScope();
     inFunction = false;
     currentFunctionName = "";
 }
 
 void SemanticAnalyzer::visit(StructDeclNode& node) {
-    (void)node;  
+    (void)node;
     symbolTable.enterScope();
-    
     symbolTable.exitScope();
 }
 
@@ -377,7 +377,6 @@ void SemanticAnalyzer::visit(VarDeclStmtNode& node) {
         node.getLine(), node.getColumn());
     
     if (node.initializer) {
-        // Для InitListExprNode пропускаем проверку типа (массивы)
         if (dynamic_cast<InitListExprNode*>(node.initializer.get())) {
             symbol->initialized = true;
         } else {
@@ -510,14 +509,15 @@ void SemanticAnalyzer::visit(LiteralExprNode& node) {
 
 void SemanticAnalyzer::visit(IdentifierExprNode& node) {
     auto symbol = symbolTable.lookup(node.name);
-    
+
     if (!symbol) {
         reportError(node.getLine(), node.getColumn(),
             "Необъявленный идентификатор '" + node.name + "'");
         setExpressionType(&node, Type(TypeKind::ERROR));
         return;
     }
-    
+
+    symbol->used = true;
     setExpressionType(&node, symbol->type);
 }
 
@@ -528,7 +528,6 @@ void SemanticAnalyzer::visit(BinaryExprNode& node) {
     Type leftType = getExpressionType(node.left.get());
     Type rightType = getExpressionType(node.right.get());
     
-    // Для оператора присваивания проверяем, что левая часть - переменная
     if (node.op == BinaryOp::ASSIGN) {
         if (!dynamic_cast<IdentifierExprNode*>(node.left.get()) &&
             !dynamic_cast<MemberAccessExprNode*>(node.left.get()) &&
@@ -561,7 +560,6 @@ void SemanticAnalyzer::visit(CallExprNode& node) {
             ErrorCode::SEM_UNDECLARED_FUNCTION);
         setExpressionType(&node, Type(TypeKind::ERROR));
         
-        // Проверяем аргументы даже при ошибке
         for (auto& arg : node.arguments) {
             arg->accept(*this);
         }
@@ -578,7 +576,6 @@ void SemanticAnalyzer::visit(CallExprNode& node) {
     bool isVariadic = symbol->isVariadic;
     
     if (isVariadic) {
-        // Variadic: аргументов должно быть не меньше, чем обязательных параметров
         size_t requiredParams = symbol->parameterTypes.size();
         if (node.arguments.size() < requiredParams) {
             reportError(node.getLine(), node.getColumn(),
@@ -587,7 +584,6 @@ void SemanticAnalyzer::visit(CallExprNode& node) {
                 ", получено " + std::to_string(node.arguments.size()));
         }
     } else {
-        // Обычная функция: точное совпадение
         if (node.arguments.size() != symbol->parameterTypes.size()) {
             reportError(node.getLine(), node.getColumn(),
                 "Неверное количество аргументов: ожидалось " +
@@ -596,7 +592,6 @@ void SemanticAnalyzer::visit(CallExprNode& node) {
         }
     }
     
-    // Проверяем типы аргументов
     size_t minArgs = std::min(node.arguments.size(), symbol->parameterTypes.size());
     for (size_t i = 0; i < minArgs; i++) {
         node.arguments[i]->accept(*this);
@@ -610,7 +605,6 @@ void SemanticAnalyzer::visit(CallExprNode& node) {
         }
     }
     
-    // Проверяем оставшиеся аргументы (если их больше)
     for (size_t i = minArgs; i < node.arguments.size(); i++) {
         node.arguments[i]->accept(*this);
     }
@@ -626,7 +620,6 @@ void SemanticAnalyzer::visit(IndexExprNode& node) {
     Type arrayType = getExpressionType(node.array.get());
     Type indexType = getExpressionType(node.index.get());
     
-    // Упрощенная проверка для индексации
     if (!arrayType.isError() && arrayType.kind != TypeKind::ARRAY) {
         reportError(node.getLine(), node.getColumn(),
             "Индексация применима только к массивам");
@@ -639,7 +632,6 @@ void SemanticAnalyzer::visit(IndexExprNode& node) {
             "Индекс массива должен быть целым числом");
     }
     
-    // Возвращаем тип элемента массива
     if (arrayType.kind == TypeKind::ARRAY && arrayType.elementType) {
         setExpressionType(&node, *arrayType.elementType);
     } else {

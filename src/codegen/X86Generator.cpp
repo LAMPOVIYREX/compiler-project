@@ -84,6 +84,29 @@ std::string X86Generator::generate(IRProgram& irProgram) {
     std::cerr << std::endl;
     if (!externFunctions.empty()) emitBlank();
     
+    // Добавляем malloc и free в extern, если есть heap-массивы
+    for (auto& func : irProgram.functions) {
+        if (!func->heapArrays.empty()) {
+            externFunctions["malloc"] = externFunctions.size();
+            externFunctions["free"] = externFunctions.size();
+            break;
+        }
+    }
+
+    // Если есть heap-массивы, обязательно объявляем malloc и free
+    bool hasHeap = false;
+    for (auto& func : irProgram.functions) {
+        if (!func->heapArrays.empty()) {
+            hasHeap = true;
+            break;
+        }
+    }
+    if (hasHeap) {
+        emit("extern malloc");
+        emit("extern free");
+        emitBlank();
+    }
+
     // 4. Генерируем функции
     for (auto& func : irProgram.functions) {
         currentFunction = func.get();
@@ -317,8 +340,25 @@ void X86Generator::emitPrologue(IRFunction& func) {
 }
 
 void X86Generator::emitEpilogue(IRFunction& func) {
-    (void)func;
     emitLabel(func.name + "_exit:");
+    
+    // Сохраняем возвращаемое значение перед free
+    if (!func.heapArrays.empty()) {
+        emit("mov r12, rax", "; save return value");
+    }
+    
+    // Вставляем free для heap-массивов
+    for (auto& arrName : func.heapArrays) {
+        std::string slot = getStackSlot(arrName);
+        emit("mov rdi, " + slot, "; free heap array " + arrName);
+        emit("call free");
+    }
+    
+    // Восстанавливаем возвращаемое значение
+    if (!func.heapArrays.empty()) {
+        emit("mov rax, r12", "; restore return value");
+    }
+    
     if (!isLeafFunction || currentStackSize > RED_ZONE_SIZE) {
         emit("mov rsp, rbp", "; restore stack pointer");
     }

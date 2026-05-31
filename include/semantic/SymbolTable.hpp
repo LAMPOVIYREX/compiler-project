@@ -38,6 +38,7 @@ struct SymbolInfo {
     int stackOffset = 0;
     int size = 0;
     bool initialized = false;
+    bool used = false;
     
     // Конструктор 
     SymbolInfo(const std::string& n, const Type& t, SymbolKind k, int l, int c)

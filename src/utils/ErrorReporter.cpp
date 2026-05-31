@@ -228,8 +228,23 @@ void ErrorReporter::reportGeneralError(int line, int col, const std::string& mes
 // ============================================================================
 
 void ErrorReporter::printErrors() const {
+    const std::string RED = "\033[1;31m";
+    const std::string YELLOW = "\033[1;33m";
+    const std::string NC = "\033[0m";
     for (const auto& error : errors) {
-        std::cerr << error.getFullMessage() << std::endl;
+        if (useColor) {
+        }
+        if (error.isWarning) {
+            if (useColor) std::cerr << YELLOW;
+            std::cerr << error.getFullMessage();
+            if (useColor) std::cerr << NC;
+            std::cerr << std::endl;
+        } else {
+            if (useColor) std::cerr << RED;
+            std::cerr << error.getFullMessage();
+            if (useColor) std::cerr << NC;
+            std::cerr << std::endl;
+        }
         std::cerr << "Файл:" << filename << std::endl;
         std::cerr << "Строка:" << error.location.line 
                   << ", позиция:" << error.location.column << std::endl;
@@ -274,7 +289,40 @@ std::string ErrorReporter::getErrorsAsString() const {
     return ss.str();
 }
 
+std::string ErrorReporter::getErrorsAsJson() const {
+    std::stringstream ss;
+    ss << "{\n  \"errors\": [\n";
+    for (size_t i = 0; i < errors.size(); ++i) {
+        const auto& error = errors[i];
+        ss << "    {\n";
+        ss << "      \"code\": \"" << errorCodeToString(error.code) << "\",\n";
+        ss << "      \"message\": \"" << error.message << "\",\n";
+        ss << "      \"file\": \"" << filename << "\",\n";
+        ss << "      \"line\": " << error.location.line << ",\n";
+        ss << "      \"column\": " << error.location.column << ",\n";
+        ss << "      \"isWarning\": " << (error.isWarning ? "true" : "false") << "\n";
+        ss << "    }";
+        if (i != errors.size() - 1) ss << ",";
+        ss << "\n";
+    }
+    ss << "  ],\n  \"count\": " << errors.size() << "\n}\n";
+    return ss.str();
+}
+
+std::string ErrorReporter::getErrorsAsIDE() const {
+    std::stringstream ss;
+    for (const auto& error : errors) {
+        ss << filename << ":" << error.location.line << ":" << error.location.column << ": ";
+        if (error.isWarning) ss << "warning: ";
+        else ss << "error: ";
+        ss << error.message << "\n";
+    }
+    return ss.str();
+}
+
 void ErrorReporter::printStats() const {
+    const std::string RED = "\033[1;31m";
+    const std::string NC = "\033[0m";
     std::cerr << "\nСтатистика компиляции:" << std::endl;
     std::cerr << "   Всего ошибок: " << errors.size() << std::endl;
     std::cerr << "   Лексических: " << countErrorsByPrefix("LEX") << std::endl;
@@ -282,6 +330,8 @@ void ErrorReporter::printStats() const {
     std::cerr << "   Семантических: " << countErrorsByPrefix("SEM") << std::endl;
     std::cerr << "   Препроцессора: " << countErrorsByPrefix("PRE") << std::endl;
     std::cerr << "   Общих: " << countErrorsByPrefix("GEN") << std::endl;
+    std::cerr << "   Предупреждений: " << std::count_if(errors.begin(), errors.end(),
+        [](const Error& e) { return e.isWarning; }) << std::endl;
     std::cerr << "   Попыток восстановления: " << recoveryAttempts << std::endl;
     std::cerr << "   Успешных восстановлений: " << successfulRecoveries << std::endl;
 }

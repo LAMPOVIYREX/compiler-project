@@ -196,6 +196,7 @@ public:
     IRType returnType;
     std::vector<IROperand> parameters;
     std::vector<std::unique_ptr<BasicBlock>> blocks;
+    std::vector<std::string> heapArrays;  
     std::unordered_map<std::string, BasicBlock*> blockMap;
     int tempCounter;
     

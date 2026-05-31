@@ -1,0 +1,53 @@
+.TH MINICOMPILER 1 "2026-05-30" "Version 1.0.0" "MiniCompiler Manual"
+.SH NAME
+minicompiler \- учебный компилятор MiniLang
+.SH SYNOPSIS
+\fBminicompiler\fR <команда> [опции] <файл>
+.SH DESCRIPTION
+MiniCompiler преобразует исходный код на языке MiniLang в исполняемый код x86-64.
+.SH COMMANDS
+.TP
+\fBlex\fR
+Токенизация исходного файла.
+.TP
+\fBparse\fR
+Построение AST.
+.TP
+\fBcheck\fR
+Семантический анализ.
+.TP
+\fBir\fR
+Генерация промежуточного представления.
+.TP
+\fBcodegen\fR
+Генерация ассемблера x86-64.
+.TP
+\fBcompile\fR
+Полная компиляция.
+.TP
+\fBhelp\fR
+Показать справку.
+.SH OPTIONS
+.TP
+\fB--output\fR <файл>
+Записать результат в файл.
+.TP
+\fB--optimize\fR
+Включить оптимизации.
+.TP
+\fB--verbose\fR
+Подробный вывод.
+.TP
+\fB--version\fR
+Показать версию.
+.TP
+\fB--color\fR <auto|always|never>
+Управление цветным выводом.
+.SH EXAMPLES
+.nf
+minicompiler lex hello.mini
+minicompiler codegen hello.mini -S
+minicompiler compile hello.mini -o hello
+.fi
+.SH AUTHOR
+Команда MiniCompiler

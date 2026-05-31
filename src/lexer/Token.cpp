@@ -24,6 +24,7 @@ const std::unordered_map<TokenType, std::string> tokenTypeToString = {
     {TokenType::KW_STRUCT, "KW_STRUCT"},
     {TokenType::KW_CONST, "KW_CONST"},
     {TokenType::KW_EXTERN, "KW_EXTERN"},
+    {TokenType::KW_HEAP, "KW_HEAP"},
     
     // Идентификаторы и литералы
     {TokenType::IDENTIFIER, "IDENTIFIER"},
@@ -84,6 +85,7 @@ const std::unordered_map<std::string, TokenType> keywords = {
     {"float", TokenType::KW_FLOAT},
     {"bool", TokenType::KW_BOOL},
     {"string", TokenType::KW_STRING},  
+    {"heap", TokenType::KW_HEAP},
     {"true", TokenType::KW_TRUE},
     {"false", TokenType::KW_FALSE},
     {"struct", TokenType::KW_STRUCT},

@@ -359,6 +359,7 @@ public:
     Type varType;
     std::string name;
     std::unique_ptr<ExpressionNode> initializer;
+    bool isHeap = false;  
     
     VarDeclStmtNode(int line, int column, const Type& t, const std::string& n)
         : StatementNode(line, column), varType(t), name(n) {}
@@ -452,6 +453,7 @@ public:
     std::vector<std::pair<Type, std::string>> parameters;
     std::unique_ptr<BlockStmtNode> body;
     bool isVariadic = false;
+    bool isHeap = false; 
     
     FunctionDeclNode(int line, int column, const Type& retType, const std::string& n)
         : DeclarationNode(line, column), returnType(retType), name(n) {}

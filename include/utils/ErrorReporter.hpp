@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+#include <unistd.h>
 #include "ErrorCodes.hpp"
 
 namespace minicompiler {
@@ -46,7 +47,7 @@ struct Error {
 
 class ErrorReporter {
 public:
-    ErrorReporter() : fatalError(false), recoveryAttempts(0), successfulRecoveries(0) {}
+    ErrorReporter() : fatalError(false), recoveryAttempts(0), successfulRecoveries(0), useColor(true) {}
     
     void setFilename(const std::string& name) { filename = name; }
     void setSourceLine(int lineNum, const std::string& line) {
@@ -55,6 +56,9 @@ public:
     
     bool hasFatalError() const { return fatalError; }
     void setFatalError(bool fatal) { fatalError = fatal; }
+    
+    // Управление цветом
+    bool useColor = true;   // Включать/выключать цветной вывод
     
     // Основной метод добавления ошибки
     void addError(ErrorCode code, const std::string& message,
@@ -105,6 +109,8 @@ public:
     // Вывод ошибок (только объявление)
     void printErrors() const;
     std::string getErrorsAsString() const;
+    std::string getErrorsAsJson() const;
+    std::string getErrorsAsIDE() const;
     
     bool hasErrors() const { return !errors.empty(); }
     void clear() { errors.clear(); fatalError = false; recoveryAttempts = 0; successfulRecoveries = 0; }
